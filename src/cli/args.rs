@@ -20,6 +20,9 @@ pub enum Commands {
 
     /// Inspect contract information without executing
     Inspect(InspectArgs),
+
+    /// Analyze contract and generate gas optimization suggestions
+    Optimize(OptimizeArgs),
 }
 
 #[derive(Parser)]
@@ -73,4 +76,27 @@ pub struct InspectArgs {
     /// Show contract metadata
     #[arg(long)]
     pub metadata: bool,
+}
+
+#[derive(Parser)]
+pub struct OptimizeArgs {
+    /// Path to the contract WASM file
+    #[arg(short, long)]
+    pub contract: PathBuf,
+
+    /// Function name to analyze (can be specified multiple times)
+    #[arg(short, long)]
+    pub function: Vec<String>,
+
+    /// Function arguments as JSON array (e.g., '["arg1", "arg2"]')
+    #[arg(short, long)]
+    pub args: Option<String>,
+
+    /// Output file for the optimization report (default: stdout)
+    #[arg(short, long)]
+    pub output: Option<PathBuf>,
+
+    /// Initial storage state as JSON object
+    #[arg(short, long)]
+    pub storage: Option<String>,
 }

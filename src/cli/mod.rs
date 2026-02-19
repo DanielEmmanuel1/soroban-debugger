@@ -1,4 +1,4 @@
 pub mod args;
 pub mod commands;
 
-pub use args::{Cli, Commands, InspectArgs, InteractiveArgs, RunArgs};
+pub use args::{Cli, Commands, InspectArgs, InteractiveArgs, OptimizeArgs, RunArgs};
