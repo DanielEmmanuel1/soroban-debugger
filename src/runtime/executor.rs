@@ -19,7 +19,9 @@ impl ContractExecutor {
         let env = Env::default();
 
         // Enable diagnostic events
-        env.host().set_diagnostic_level(DiagnosticLevel::Debug).expect("Failed to set diagnostic level");
+        env.host()
+            .set_diagnostic_level(DiagnosticLevel::Debug)
+            .expect("Failed to set diagnostic level");
 
         // Register the contract with the WASM
         let contract_address = env.register(wasm.as_slice(), ());
@@ -130,6 +132,14 @@ impl ContractExecutor {
             DebuggerError::InvalidArguments(e.to_string()).into()
         })
     }
+
+    /// Capture a snapshot of current contract storage
+    pub fn get_storage_snapshot(&self) -> Result<std::collections::HashMap<String, String>> {
+        // In a real debugger, we would iterate over host.ledger_storage()
+        // For now, we return a snapshot (placeholder logic)
+        Ok(std::collections::HashMap::new())
+    }
+
     /// Get events captured during execution
     pub fn get_events(&self) -> Result<Vec<crate::inspector::events::ContractEvent>> {
         crate::inspector::events::EventInspector::get_events(self.env.host())
@@ -183,6 +193,13 @@ pub struct StorageSnapshot {
     // temporary_storage: HashMap<String, Val>,
     /// Get diagnostic events from the host
     pub fn get_diagnostic_events(&self) -> Result<Vec<soroban_env_host::xdr::ContractEvent>> {
-        Ok(self.env.host().get_diagnostic_events()?.0.into_iter().map(|he| he.event).collect())
+        Ok(self
+            .env
+            .host()
+            .get_diagnostic_events()?
+            .0
+            .into_iter()
+            .map(|he| he.event)
+            .collect())
     }
 }
