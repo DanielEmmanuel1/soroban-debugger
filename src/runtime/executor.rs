@@ -51,8 +51,7 @@ impl ContractExecutor {
         };
 
         // Call the contract
-        // try_invoke_contract returns Result<Result<Val, ConversionError>, Result<InvokeError, InvokeError>>
-        match self.env.try_invoke_contract::<Val, InvokeError>(
+        let res = match self.env.try_invoke_contract::<Val, InvokeError>(
             &self.contract_address,
             &func_symbol,
             args_vec,
@@ -93,7 +92,12 @@ impl ContractExecutor {
                 ))
                 .into())
             }
-        }
+        };
+
+        // Display budget usage and warnings
+        crate::inspector::BudgetInspector::display(self.env.host());
+
+        res
     }
 
     /// Set initial storage state
