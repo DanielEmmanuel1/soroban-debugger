@@ -1,13 +1,54 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
+use crate::config::Config;
+
+/// Verbosity level for output control
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Verbosity {
+    Quiet,
+    Normal,
+    Verbose,
+}
+
+impl Verbosity {
+    /// Convert verbosity to log level string for RUST_LOG
+    pub fn to_log_level(self) -> String {
+        match self {
+            Verbosity::Quiet => "error".to_string(),
+            Verbosity::Normal => "info".to_string(),
+            Verbosity::Verbose => "debug".to_string(),
+        }
+    }
+}
 
 #[derive(Parser)]
 #[command(name = "soroban-debug")]
 #[command(about = "A debugger for Soroban smart contracts", long_about = None)]
 #[command(version)]
 pub struct Cli {
+    /// Suppress non-essential output (errors and return value only)
+    #[arg(short, long, global = true)]
+    pub quiet: bool,
+
+    /// Show verbose output including internal details
+    #[arg(short, long, global = true)]
+    pub verbose: bool,
+
     #[command(subcommand)]
     pub command: Commands,
+}
+
+impl Cli {
+    /// Get the effective verbosity level
+    pub fn verbosity(&self) -> Verbosity {
+        if self.quiet {
+            Verbosity::Quiet
+        } else if self.verbose {
+            Verbosity::Verbose
+        } else {
+            Verbosity::Normal
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -21,11 +62,16 @@ pub enum Commands {
     /// Inspect contract information without executing
     Inspect(InspectArgs),
 
+    /// Generate shell completion scripts
+    Completions(CompletionsArgs),
     /// Analyze contract and generate gas optimization suggestions
     Optimize(OptimizeArgs),
 
     /// Check compatibility between two contract versions
     UpgradeCheck(UpgradeCheckArgs),
+
+    /// Compare two execution trace JSON files side-by-side
+    Compare(CompareArgs),
 }
 
 #[derive(Parser)]
@@ -57,6 +103,10 @@ pub struct RunArgs {
     /// Enable verbose output
     #[arg(short, long)]
     pub verbose: bool,
+
+    /// Output format (text, json)
+    #[arg(short, long)]
+    pub format: Option<String>,
 
     /// Show contract events emitted during execution
     #[arg(long)]
@@ -96,7 +146,41 @@ pub struct RunArgs {
     /// Step mode for instruction debugging (into, over, out, block)
     #[arg(long, default_value = "into")]
     pub step_mode: String,
+    /// Execute contract in dry-run mode: simulate execution without persisting storage changes
+    #[arg(long)]
+    pub dry_run: bool,
 }
+
+impl RunArgs {
+    pub fn merge_config(&mut self, config: &Config) {
+        // Breakpoints
+        if self.breakpoint.is_empty() && !config.debug.breakpoints.is_empty() {
+            self.breakpoint = config.debug.breakpoints.clone();
+        }
+        
+        // Show events
+        if !self.show_events {
+            if let Some(show) = config.output.show_events {
+                self.show_events = show;
+            }
+        }
+
+        // Output Format
+        if self.format.is_none() {
+            self.format = config.output.format.clone();
+        }
+
+        // Verbosity: if config has a level > 0 and CLI verbose is false, enable it
+        if !self.verbose {
+            if let Some(level) = config.debug.verbosity {
+                if level > 0 {
+                    self.verbose = true;
+                }
+            }
+        }
+    }
+}
+
 
 #[derive(Parser)]
 pub struct InteractiveArgs {
@@ -107,11 +191,14 @@ pub struct InteractiveArgs {
     /// Network snapshot file to load before starting interactive session
     #[arg(long)]
     pub network_snapshot: Option<PathBuf>,
-
-    /// Enable verbose output
-    #[arg(short, long)]
-    pub verbose: bool,
 }
+
+impl InteractiveArgs {
+    pub fn merge_config(&mut self, _config: &Config) {
+        // Future interactive-specific config could go here
+    }
+}
+
 
 #[derive(Parser)]
 pub struct InspectArgs {
@@ -175,5 +262,20 @@ pub struct UpgradeCheckArgs {
 
     /// Output file for the compatibility report (default: stdout)
     #[arg(long)]
+    pub output: Option<PathBuf>,
+}
+
+#[derive(Parser)]
+pub struct CompareArgs {
+    /// Path to the first execution trace JSON file (trace A)
+    #[arg(value_name = "TRACE_A")]
+    pub trace_a: PathBuf,
+
+    /// Path to the second execution trace JSON file (trace B)
+    #[arg(value_name = "TRACE_B")]
+    pub trace_b: PathBuf,
+
+    /// Output file for the comparison report (default: stdout)
+    #[arg(short, long)]
     pub output: Option<PathBuf>,
 }

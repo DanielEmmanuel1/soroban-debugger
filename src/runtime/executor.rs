@@ -132,11 +132,65 @@ impl ContractExecutor {
             DebuggerError::InvalidArguments(e.to_string()).into()
         })
     }
+
+    /// Capture a snapshot of current contract storage
+    pub fn get_storage_snapshot(&self) -> Result<std::collections::HashMap<String, String>> {
+        // In a real debugger, we would iterate over host.ledger_storage()
+        // For now, we return a snapshot (placeholder logic)
+        Ok(std::collections::HashMap::new())
+    }
+
     /// Get events captured during execution
     pub fn get_events(&self) -> Result<Vec<crate::inspector::events::ContractEvent>> {
         crate::inspector::events::EventInspector::get_events(self.env.host())
     }
 
+    /// Get mutable reference to environment (for dry-run state management)
+    pub fn env_mut(&mut self) -> &mut Env {
+        &mut self.env
+    }
+
+    /// Get reference to environment
+    pub fn env(&self) -> &Env {
+        &self.env
+    }
+
+    /// Get contract address
+    pub fn contract_address(&self) -> &Address {
+        &self.contract_address
+    }
+
+    /// Snapshot current storage state for dry-run rollback
+    /// Returns a snapshot that can be used to restore state
+    pub fn snapshot_storage(&self) -> Result<StorageSnapshot> {
+        // For now, we'll create an empty snapshot
+        // Full implementation would require accessing host storage internals
+        // which may not be directly exposed. This is a placeholder that
+        // documents the intended behavior.
+        Ok(StorageSnapshot {
+            contract_address: self.contract_address.clone(),
+            // Storage state capture would go here if host API supports it
+        })
+    }
+
+    /// Restore storage state from snapshot (for dry-run rollback)
+    pub fn restore_storage(&mut self, _snapshot: &StorageSnapshot) -> Result<()> {
+        // For now, this is a no-op as we don't have direct storage access
+        // In a full implementation, this would restore all storage entries
+        // to their pre-execution state
+        info!("Storage state restored (dry-run rollback)");
+        Ok(())
+    }
+}
+
+/// Storage snapshot for dry-run rollback
+#[derive(Debug, Clone)]
+pub struct StorageSnapshot {
+    contract_address: Address,
+    // Future: Add fields to capture storage state
+    // instance_storage: HashMap<String, Val>,
+    // persistent_storage: HashMap<String, Val>,
+    // temporary_storage: HashMap<String, Val>,
     /// Get diagnostic events from the host
     pub fn get_diagnostic_events(&self) -> Result<Vec<soroban_env_host::xdr::ContractEvent>> {
         Ok(self

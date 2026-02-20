@@ -102,9 +102,12 @@ impl DebuggerEngine {
     }
 
     /// Execute a contract function with debugging
+    /// Execute a contract function with debugging and storage tracking
     pub fn execute(&mut self, function: &str, args: Option<&str>) -> Result<String> {
         info!("Executing function: {}", function);
 
+        // Capture storage state before execution
+        let storage_before = self.executor.get_storage_snapshot()?;
         // Initialize stack state
         self.state.set_current_function(function.to_string());
         self.state.call_stack_mut().clear();
@@ -145,6 +148,18 @@ impl DebuggerEngine {
         let events = self.executor.get_diagnostic_events()?;
         let current_func = self.state.current_function().unwrap_or("entry").to_string();
 
+        // Capture storage state after execution
+        let storage_after = self.executor.get_storage_snapshot()?;
+
+        // Calculate and display storage diff if requested via some flag
+        // or just store it in state for the CLI to use.
+        let diff = crate::inspector::StorageInspector::compute_diff(&storage_before, &storage_after);
+        if !diff.is_empty() {
+             crate::inspector::StorageInspector::display_diff(&diff);
+        }
+
+        info!("Execution completed");
+        Ok(result)
         let stack = self.state.call_stack_mut();
         stack.clear();
 
@@ -354,5 +369,8 @@ impl DebuggerEngine {
     pub fn step(&mut self) -> Result<()> {
         let _ = self.step_into()?;
         Ok(())
+    /// Get mutable reference to executor
+    pub fn executor_mut(&mut self) -> &mut ContractExecutor {
+        &mut self.executor
     }
 }

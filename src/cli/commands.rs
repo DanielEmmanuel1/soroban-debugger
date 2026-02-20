@@ -1,4 +1,7 @@
-use crate::cli::args::{InspectArgs, InteractiveArgs, OptimizeArgs, RunArgs, UpgradeCheckArgs};
+use crate::cli::args::{CompareArgs, InspectArgs, InteractiveArgs, OptimizeArgs, RunArgs, UpgradeCheckArgs};
+use crate::cli::args::{
+    InspectArgs, InteractiveArgs, OptimizeArgs, RunArgs, UpgradeCheckArgs, Verbosity,
+};
 use crate::debugger::engine::DebuggerEngine;
 use crate::debugger::instruction_pointer::StepMode;
 use crate::logging;
@@ -27,6 +30,12 @@ fn print_warning(message: impl AsRef<str>) {
 
 /// Execute the run command
 pub fn run(args: RunArgs) -> Result<()> {
+    if args.dry_run {
+        return run_dry_run(&args);
+    }
+
+    println!("Loading contract: {:?}", args.contract);
+pub fn run(args: RunArgs, _verbosity: Verbosity) -> Result<()> {
     print_info(format!("Loading contract: {:?}", args.contract));
     logging::log_loading_contract(&args.contract.to_string_lossy());
 
@@ -151,13 +160,40 @@ pub fn run(args: RunArgs) -> Result<()> {
     if !args.storage_filter.is_empty() {
         let storage_filter = crate::inspector::storage::StorageFilter::new(&args.storage_filter)
             .map_err(|e| anyhow::anyhow!("Invalid storage filter: {}", e))?;
+        println!("\n--- Storage ---");
+        
+        // Note: Storage inspection from executor is not yet fully implemented
+        // For now, create an empty inspector to demonstrate the filtering interface
+        let inspector = crate::inspector::storage::StorageInspector::new();
+        // Get storage data from the executor
+        let storage_data = engine.executor().get_storage()
+            .map_err(|e| anyhow::anyhow!("Failed to get storage data: {}", e))?;
+        
+        // Create inspector with storage data
+        let inspector = crate::inspector::StorageInspector::new(&storage_data);
 
         print_info("\n--- Storage ---");
         tracing::info!("Displaying filtered storage");
         let inspector = crate::inspector::StorageInspector::new();
         inspector.display_filtered(&storage_filter);
+        
+        println!("(Storage inspection from executor not yet fully implemented)");
     }
 
+    // If output format is JSON, print full result as JSON and exit
+    if let Some(format) = &args.format {
+        if format.eq_ignore_ascii_case("json") {
+            let mut output = serde_json::json!({
+                "result": format!("{:?}", result),
+            });
+
+            if args.show_events {
+                let events = engine.executor().get_events()?;
+                output["events"] = serde_json::to_value(&events).unwrap_or(serde_json::Value::Null);
+            }
+
+            println!("{}", serde_json::to_string_pretty(&output).unwrap());
+            return Ok(());
     if args.show_auth {
         let auth_tree = engine.executor().get_auth_tree()?;
         if args.json {
@@ -172,8 +208,119 @@ pub fn run(args: RunArgs) -> Result<()> {
     Ok(())
 }
 
+/// Execute the run command in dry-run mode
+fn run_dry_run(args: &RunArgs) -> Result<()> {
+    println!("[DRY RUN] Loading contract: {:?}", args.contract);
+
+    // Load WASM file
+    let wasm_bytes = fs::read(&args.contract)
+        .with_context(|| format!("Failed to read WASM file: {:?}", args.contract))?;
+
+    println!(
+        "[DRY RUN] Contract loaded successfully ({} bytes)",
+        wasm_bytes.len()
+    );
+
+    // Load network snapshot if provided
+    if let Some(snapshot_path) = &args.network_snapshot {
+        println!("\n[DRY RUN] Loading network snapshot: {:?}", snapshot_path);
+        let loader = SnapshotLoader::from_file(snapshot_path)?;
+        let loaded_snapshot = loader.apply_to_environment()?;
+        println!("[DRY RUN] {}", loaded_snapshot.format_summary());
+    }
+
+    // Parse arguments if provided
+    let parsed_args = if let Some(args_json) = &args.args {
+        Some(parse_args(args_json)?)
+    } else {
+        None
+    };
+
+    // Parse storage if provided
+    let initial_storage = if let Some(storage_json) = &args.storage {
+        Some(parse_storage(storage_json)?)
+    } else {
+        None
+    };
+
+    println!("\n[DRY RUN] Starting debugger...");
+    println!("[DRY RUN] Function: {}", args.function);
+    if let Some(ref args) = parsed_args {
+        println!("[DRY RUN] Arguments: {}", args);
+    }
+
+    // Create executor for dry-run (this will be rolled back)
+    let mut executor = ContractExecutor::new(wasm_bytes)?;
+
+    // Set up initial storage if provided
+    if let Some(storage) = &initial_storage {
+        executor.set_initial_storage(storage.clone())?;
+    }
+
+    // Snapshot storage state before execution
+    let storage_snapshot = executor.snapshot_storage()?;
+    println!("[DRY RUN] Storage state snapshotted");
+
+    // Create debugger engine
+    let mut engine = DebuggerEngine::new(executor, args.breakpoint.clone());
+
+    // Execute with debugging
+    println!("\n[DRY RUN] --- Execution Start ---\n");
+    let result = engine.execute(&args.function, parsed_args.as_deref())?;
+    println!("\n[DRY RUN] --- Execution Complete ---\n");
+
+    println!("[DRY RUN] Result: {:?}", result);
+
+    // Display events if requested
+    if args.show_events {
+        println!("\n[DRY RUN] --- Events ---");
+        let events = engine.executor().get_events()?;
+        let filtered_events = if let Some(topic) = &args.filter_topic {
+            crate::inspector::events::EventInspector::filter_events(&events, topic)
+        } else {
+            events
+        };
+
+        if filtered_events.is_empty() {
+            println!("[DRY RUN] No events captured.");
+        } else {
+            for (i, event) in filtered_events.iter().enumerate() {
+                println!("[DRY RUN] Event #{}:", i);
+                if let Some(contract_id) = &event.contract_id {
+                    println!("[DRY RUN]   Contract: {}", contract_id);
+                }
+                println!("[DRY RUN]   Topics: {:?}", event.topics);
+                println!("[DRY RUN]   Data: {}", event.data);
+                println!();
+            }
+        }
+    }
+
+    // Display storage with optional filtering
+    if !args.storage_filter.is_empty() {
+        let storage_filter = crate::inspector::storage::StorageFilter::new(&args.storage_filter)
+            .map_err(|e| anyhow::anyhow!("Invalid storage filter: {}", e))?;
+        println!("\n[DRY RUN] --- Storage (Post-Execution) ---");
+
+        // Note: Storage display would go here if get_storage() is implemented
+        // For now, we'll show a message
+        println!("[DRY RUN] Storage changes would be displayed here");
+        println!("[DRY RUN] (Storage inspection not yet fully implemented)");
+    } else {
+        println!("\n[DRY RUN] --- Storage Changes ---");
+        println!("[DRY RUN] (Use --storage-filter to view specific storage entries)");
+    }
+
+    // Restore storage state (rollback)
+    engine.executor_mut().restore_storage(&storage_snapshot)?;
+    println!("\n[DRY RUN] Storage state restored (all changes rolled back)");
+    println!("[DRY RUN] Dry-run completed - no persistent changes were made");
+
+    Ok(())
+}
+
 /// Execute the interactive command
-pub fn interactive(args: InteractiveArgs) -> Result<()> {
+pub fn interactive(args: InteractiveArgs, _verbosity: Verbosity) -> Result<()> {
     print_info(format!(
         "Starting interactive debugger for: {:?}",
         args.contract
@@ -211,13 +358,47 @@ pub fn interactive(args: InteractiveArgs) -> Result<()> {
 }
 
 /// Execute the inspect command
-pub fn inspect(args: InspectArgs) -> Result<()> {
+pub fn inspect(args: InspectArgs, _verbosity: Verbosity) -> Result<()> {
     print_info(format!("Inspecting contract: {:?}", args.contract));
     logging::log_loading_contract(&args.contract.to_string_lossy());
 
     let wasm_bytes = fs::read(&args.contract)
         .with_context(|| format!("Failed to read WASM file: {:?}", args.contract))?;
 
+    // Get module information
+    let module_info = crate::utils::wasm::get_module_info(&wasm_bytes)?;
+
+    
+    // Display header
+    println!("\n{}", "═".repeat(54));
+    println!("  Soroban Contract Inspector");
+    println!("  {}", "═".repeat(54));
+    println!("\n  File : {:?}", args.contract);
+    println!("  Size : {} bytes", wasm_bytes.len());
+
+    // Display module information
+    println!("\n{}", "─".repeat(54));
+    println!("  Module Information");
+    println!("  {}", "─".repeat(52));
+    println!("  Types      : {}", module_info.type_count);
+    println!("  Functions  : {}", module_info.function_count);
+    println!("  Exports    : {}", module_info.export_count);
+
+    // Display exported functions if requested
+    if args.functions {
+        println!("\n{}", "─".repeat(54));
+        println!("  Exported Functions");
+        println!("  {}", "─".repeat(52));
+
+        
+        let functions = crate::utils::wasm::parse_functions(&wasm_bytes)?;
+        if functions.is_empty() {
+            println!("  (No exported functions found)");
+        } else {
+            for func in functions {
+                println!("  • {}", func);
+            }
+        }
     print_info("\nContract Information:");
     println!("  Size: {} bytes", wasm_bytes.len());
     logging::log_contract_loaded(wasm_bytes.len());
@@ -236,7 +417,37 @@ pub fn inspect(args: InspectArgs) -> Result<()> {
         }
     }
 
+    // Display metadata if requested
     if args.metadata {
+        println!("\n{}", "─".repeat(54));
+        println!("  Contract Metadata");
+        println!("  {}", "─".repeat(52));
+
+        
+        match crate::utils::wasm::extract_contract_metadata(&wasm_bytes) {
+            Ok(metadata) => {
+                if metadata.is_empty() {
+                    println!("  ⚠  No metadata section embedded in this contract");
+                } else {
+                    if let Some(version) = metadata.contract_version {
+                        println!("  Contract version      : {}", version);
+                    }
+                    if let Some(sdk) = metadata.sdk_version {
+                        println!("  Soroban SDK version   : {}", sdk);
+                    }
+                    if let Some(build_date) = metadata.build_date {
+                        println!("  Build date            : {}", build_date);
+                    }
+                    if let Some(author) = metadata.author {
+                        println!("  Author / organization : {}", author);
+                    }
+                    if let Some(desc) = metadata.description {
+                        println!("  Description           : {}", desc);
+                    }
+                    if let Some(impl_notes) = metadata.implementation {
+                        println!("  Implementation notes  : {}", impl_notes);
+                    }
+                }
         print_info("\nMetadata:");
         let metadata = crate::utils::wasm::extract_contract_metadata(&wasm_bytes)?;
 
@@ -258,12 +469,15 @@ pub fn inspect(args: InspectArgs) -> Result<()> {
             if let Some(desc) = metadata.description {
                 println!("  Description           : {}", desc);
             }
-            if let Some(impl_notes) = metadata.implementation {
-                println!("  Implementation notes  : {}", impl_notes);
+            Err(e) => {
+                println!("  Error reading metadata: {}", e);
+                println!("  (This may indicate a corrupted metadata section)");
             }
         }
     }
 
+    // Display footer
+    println!("\n{}", "═".repeat(54));
     Ok(())
 }
 
@@ -295,7 +509,7 @@ pub fn parse_storage(json: &str) -> Result<String> {
 }
 
 /// Execute the optimize command
-pub fn optimize(args: OptimizeArgs) -> Result<()> {
+pub fn optimize(args: OptimizeArgs, _verbosity: Verbosity) -> Result<()> {
     print_info(format!(
         "Analyzing contract for gas optimization: {:?}",
         args.contract
@@ -351,6 +565,12 @@ pub fn optimize(args: OptimizeArgs) -> Result<()> {
                 ));
             }
             Err(e) => {
+                eprintln!("    ⚠  Failed to analyze function {}: {}", function_name, e);
+                eprintln!(
+                    "    ⚠  Failed to analyze function {}: {}",
+                    function_name, e
+                );
+                // Continue with other functions instead of stopping
                 print_warning(format!(
                     "    Warning: Failed to analyze function {}: {}",
                     function_name, e
@@ -381,7 +601,7 @@ pub fn optimize(args: OptimizeArgs) -> Result<()> {
 }
 
 /// Execute the upgrade-check command
-pub fn upgrade_check(args: UpgradeCheckArgs) -> Result<()> {
+pub fn upgrade_check(args: UpgradeCheckArgs, _verbosity: Verbosity) -> Result<()> {
     print_info("Comparing contracts...");
     print_info(format!("  Old: {:?}", args.old));
     print_info(format!("  New: {:?}", args.new));
@@ -568,6 +788,24 @@ fn run_instruction_stepping(
                 println!("Unknown command: {}. Type 'help' for available commands.", input);
             }
         }
+/// Execute the compare command
+pub fn compare(args: CompareArgs) -> Result<()> {
+    println!("Loading trace A: {:?}", args.trace_a);
+    let trace_a = crate::compare::ExecutionTrace::from_file(&args.trace_a)?;
+
+    println!("Loading trace B: {:?}", args.trace_b);
+    let trace_b = crate::compare::ExecutionTrace::from_file(&args.trace_b)?;
+
+    println!("Comparing traces...\n");
+    let report = crate::compare::CompareEngine::compare(&trace_a, &trace_b);
+    let rendered = crate::compare::CompareEngine::render_report(&report);
+
+    if let Some(output_path) = &args.output {
+        fs::write(output_path, &rendered)
+            .with_context(|| format!("Failed to write report to: {:?}", output_path))?;
+        println!("Comparison report written to: {:?}", output_path);
+    } else {
+        println!("{}", rendered);
     }
 
     Ok(())

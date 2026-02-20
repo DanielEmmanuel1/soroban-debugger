@@ -129,6 +129,64 @@ Options:
   -c, --contract <FILE>     Path to the contract WASM file
 ```
 
+### Completions Command
+
+Generate shell completion scripts for your favorite shell:
+
+```bash
+soroban-debug completions bash > /usr/local/etc/bash_completion.d/soroban-debug
+```
+
+Supported shells: `bash`, `zsh`, `fish`, `powershell`.
+
+#### Installation Instructions
+
+**Bash:**
+```bash
+soroban-debug completions bash > /usr/local/etc/bash_completion.d/soroban-debug
+```
+
+**Zsh:**
+```bash
+soroban-debug completions zsh > /usr/local/share/zsh/site-functions/_soroban-debug
+```
+
+**Fish:**
+```bash
+soroban-debug completions fish > ~/.config/fish/completions/soroban-debug.fish
+```
+
+**PowerShell:**
+```powershell
+soroban-debug completions powershell >> $PROFILE
+```
+
+### Compare Command
+
+Compare two execution trace JSON files side-by-side to identify
+differences and regressions in storage, budget, return values, and
+execution flow:
+
+```bash
+soroban-debug compare <TRACE_A> <TRACE_B> [OPTIONS]
+
+Options:
+  -o, --output <FILE>       Output file for the comparison report (default: stdout)
+```
+
+Example:
+
+```bash
+# Compare two saved execution traces
+soroban-debug compare examples/trace_a.json examples/trace_b.json
+
+# Save report to a file
+soroban-debug compare baseline.json new.json --output diff_report.txt
+```
+
+See [`doc/compare.md`](doc/compare.md) for the full trace JSON format reference
+and a regression testing workflow guide.
+
 ## Examples
 
 ### Example 1: Debug a Token Transfer
@@ -293,6 +351,29 @@ Commands:
   help                 Show this help message
   q, quit              Exit debugger
 ```
+
+## Configuration File
+
+The debugger supports loading default settings from a `.soroban-debug.toml` file in the project root. CLI flags always override settings defined in the configuration file.
+
+### Example `.soroban-debug.toml`
+
+```toml
+[debug]
+# Default breakpoints to set
+breakpoints = ["verify", "auth"]
+
+[output]
+# Show events by default
+show_events = true
+```
+
+### Supported Settings
+
+| Setting | Path | Description |
+|---------|------|-------------|
+| `breakpoints` | `debug.breakpoints` | List of function names to set as breakpoints |
+| `show_events` | `output.show_events` | Whether to show events by default (`true`/`false`) |
 
 ## Use Cases
 
