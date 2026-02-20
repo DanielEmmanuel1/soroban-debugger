@@ -14,4 +14,9 @@ fn test_version_command() {
     cmd.assert().success();
 }
 
-// More tests will be added as functionality is implemented
+#[test]
+fn test_upgrade_check_help_command() {
+    let mut cmd = Command::cargo_bin("soroban-debug").unwrap();
+    cmd.arg("upgrade-check").arg("--help");
+    cmd.assert().success();
+}

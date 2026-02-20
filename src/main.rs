@@ -30,6 +30,9 @@ fn main() -> Result<()> {
         Commands::Optimize(args) => {
             soroban_debugger::cli::commands::optimize(args)?;
         }
+        Commands::UpgradeCheck(args) => {
+            soroban_debugger::cli::commands::upgrade_check(args)?;
+        }
     }
 
     Ok(())

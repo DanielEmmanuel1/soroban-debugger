@@ -1,4 +1,4 @@
-use crate::cli::args::{InspectArgs, InteractiveArgs, OptimizeArgs, RunArgs};
+use crate::cli::args::{InspectArgs, InteractiveArgs, OptimizeArgs, RunArgs, UpgradeCheckArgs};
 use crate::debugger::engine::DebuggerEngine;
 use crate::runtime::executor::ContractExecutor;
 use crate::ui::tui::DebuggerUI;
@@ -183,6 +183,46 @@ pub fn optimize(args: OptimizeArgs) -> Result<()> {
         fs::write(output_path, &markdown)
             .with_context(|| format!("Failed to write report to: {:?}", output_path))?;
         println!("\nOptimization report written to: {:?}", output_path);
+    } else {
+        println!("\n{}", markdown);
+    }
+
+    Ok(())
+}
+
+/// Execute the upgrade-check command
+pub fn upgrade_check(args: UpgradeCheckArgs) -> Result<()> {
+    println!("Comparing contracts...");
+    println!("  Old: {:?}", args.old);
+    println!("  New: {:?}", args.new);
+
+    let old_bytes = fs::read(&args.old)
+        .with_context(|| format!("Failed to read old WASM file: {:?}", args.old))?;
+    let new_bytes = fs::read(&args.new)
+        .with_context(|| format!("Failed to read new WASM file: {:?}", args.new))?;
+
+    println!(
+        "Loaded contracts (Old: {} bytes, New: {} bytes)",
+        old_bytes.len(),
+        new_bytes.len()
+    );
+
+    let analyzer = crate::analyzer::upgrade::UpgradeAnalyzer::new();
+
+    println!("Running analysis...");
+    let report = analyzer.analyze(
+        &old_bytes,
+        &new_bytes,
+        args.function.as_deref(),
+        args.args.as_deref(),
+    )?;
+
+    let markdown = analyzer.generate_markdown_report(&report);
+
+    if let Some(output_path) = &args.output {
+        fs::write(output_path, &markdown)
+            .with_context(|| format!("Failed to write report to: {:?}", output_path))?;
+        println!("\nCompatibility report written to: {:?}", output_path);
     } else {
         println!("\n{}", markdown);
     }

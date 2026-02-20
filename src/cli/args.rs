@@ -23,6 +23,9 @@ pub enum Commands {
 
     /// Analyze contract and generate gas optimization suggestions
     Optimize(OptimizeArgs),
+
+    /// Check compatibility between two contract versions
+    UpgradeCheck(UpgradeCheckArgs),
 }
 
 #[derive(Parser)]
@@ -99,4 +102,27 @@ pub struct OptimizeArgs {
     /// Initial storage state as JSON object
     #[arg(short, long)]
     pub storage: Option<String>,
+}
+
+#[derive(Parser)]
+pub struct UpgradeCheckArgs {
+    /// Path to the old contract WASM file
+    #[arg(short, long)]
+    pub old: PathBuf,
+
+    /// Path to the new contract WASM file
+    #[arg(short, long)]
+    pub new: PathBuf,
+
+    /// Function name to test side-by-side (optional)
+    #[arg(short, long)]
+    pub function: Option<String>,
+
+    /// Function arguments as JSON array for side-by-side test
+    #[arg(short, long)]
+    pub args: Option<String>,
+
+    /// Output file for the compatibility report (default: stdout)
+    #[arg(long)]
+    pub output: Option<PathBuf>,
 }
