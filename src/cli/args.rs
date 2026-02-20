@@ -7,7 +7,11 @@ use std::path::PathBuf;
 #[command(version)]
 pub struct Cli {
     #[command(subcommand)]
-    pub command: Commands,
+    pub command: Option<Commands>,
+
+    /// Show detailed version information
+    #[arg(long)]
+    pub version_verbose: bool,
 }
 
 #[derive(Subcommand)]
