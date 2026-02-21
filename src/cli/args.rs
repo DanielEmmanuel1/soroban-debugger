@@ -168,6 +168,10 @@ pub struct RunArgs {
     /// Append to output file instead of overwriting
     #[arg(long, requires = "save_output")]
     pub append: bool,
+
+    /// Path to JSON file with custom error code definitions
+    #[arg(long)]
+    pub error_spec: Option<PathBuf>,
 }
 
 impl RunArgs {

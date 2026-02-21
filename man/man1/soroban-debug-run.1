@@ -4,7 +4,7 @@
 .SH NAME
 soroban\-debug\-run \- Run a contract function with the debugger
 .SH SYNOPSIS
-\fBsoroban\-debug\-run\fR <\fB\-c\fR|\fB\-\-contract\fR> <\fB\-f\fR|\fB\-\-function\fR> [\fB\-a\fR|\fB\-\-args\fR] [\fB\-s\fR|\fB\-\-storage\fR] [\fB\-b\fR|\fB\-\-breakpoint\fR] [\fB\-\-network\-snapshot\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-\-format\fR] [\fB\-\-show\-events\fR] [\fB\-\-show\-auth\fR] [\fB\-\-json\fR] [\fB\-\-filter\-topic\fR] [\fB\-\-repeat\fR] [\fB\-\-storage\-filter\fR] [\fB\-\-instruction\-debug\fR] [\fB\-\-step\-instructions\fR] [\fB\-\-step\-mode\fR] [\fB\-\-dry\-run\fR] [\fB\-\-batch\-args\fR] [\fB\-\-save\-output\fR] [\fB\-\-append\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+\fBsoroban\-debug\-run\fR <\fB\-c\fR|\fB\-\-contract\fR> <\fB\-f\fR|\fB\-\-function\fR> [\fB\-a\fR|\fB\-\-args\fR] [\fB\-s\fR|\fB\-\-storage\fR] [\fB\-b\fR|\fB\-\-breakpoint\fR] [\fB\-\-network\-snapshot\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-\-format\fR] [\fB\-\-show\-events\fR] [\fB\-\-show\-auth\fR] [\fB\-\-json\fR] [\fB\-\-filter\-topic\fR] [\fB\-\-repeat\fR] [\fB\-\-storage\-filter\fR] [\fB\-\-instruction\-debug\fR] [\fB\-\-step\-instructions\fR] [\fB\-\-step\-mode\fR] [\fB\-\-dry\-run\fR] [\fB\-\-batch\-args\fR] [\fB\-\-save\-output\fR] [\fB\-\-append\fR] [\fB\-\-error\-spec\fR] [\fB\-h\fR|\fB\-\-help\fR] 
 .SH DESCRIPTION
 Run a contract function with the debugger
 .SH OPTIONS
@@ -71,6 +71,9 @@ Save execution results to file
 .TP
 \fB\-\-append\fR
 Append to output file instead of overwriting
+.TP
+\fB\-\-error\-spec\fR \fI<ERROR_SPEC>\fR
+Path to JSON file with custom error code definitions
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help

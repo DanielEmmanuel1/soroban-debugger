@@ -44,6 +44,28 @@ fn write_to_file(path: &Path, content: &str, append: bool) -> Result<()> {
     Ok(())
 }
 
+fn extract_error_code(error: &anyhow::Error) -> Option<u32> {
+    let error_str = format!("{:?}", error);
+
+    if let Some(start) = error_str.find("error code: ") {
+        let code_str = &error_str[start + 12..];
+        if let Some(end) = code_str.find(|c: char| !c.is_ascii_digit()) {
+            code_str[..end].parse().ok()
+        } else {
+            code_str.parse().ok()
+        }
+    } else if let Some(start) = error_str.find("Contract error code: ") {
+        let code_str = &error_str[start + 21..];
+        if let Some(end) = code_str.find(|c: char| !c.is_ascii_digit()) {
+            code_str[..end].parse().ok()
+        } else {
+            code_str.parse().ok()
+        }
+    } else {
+        None
+    }
+}
+
 /// Execute batch mode with parallel execution
 fn run_batch(args: &RunArgs, batch_file: &std::path::Path) -> Result<()> {
     print_info(format!("Loading contract: {:?}", args.contract));
@@ -200,7 +222,25 @@ pub fn run(args: RunArgs, _verbosity: Verbosity) -> Result<()> {
     print_info("\n--- Execution Start ---\n");
     memory_tracker.record_snapshot(engine.executor().host(), "before_execution");
     instruction_counter.start_function(&args.function, engine.executor().host());
-    let result = engine.execute(&args.function, parsed_args.as_deref())?;
+
+    let mut error_db = crate::debugger::error_db::ErrorDatabase::new();
+    if let Some(spec_path) = &args.error_spec {
+        if let Err(e) = error_db.load_custom_errors_from_spec(&spec_path.to_string_lossy()) {
+            print_warning(format!("Failed to load error spec: {}", e));
+        }
+    }
+
+    let result = engine.execute(&args.function, parsed_args.as_deref());
+
+    let mut error_code_for_json: Option<u32> = None;
+    if let Err(ref e) = result {
+        if let Some(error_code) = extract_error_code(e) {
+            error_code_for_json = Some(error_code);
+            error_db.display_error(error_code);
+        }
+    }
+
+    let result = result?;
     instruction_counter.end_function(engine.executor().host());
 
     if let Ok(diagnostic_events) = engine.executor().get_diagnostic_events() {
@@ -320,6 +360,13 @@ pub fn run(args: RunArgs, _verbosity: Verbosity) -> Result<()> {
         let instruction_json =
             serde_json::to_value(instruction_counts).unwrap_or(serde_json::Value::Null);
         output["instruction_counts"] = instruction_json;
+
+        if let Some(error_code) = error_code_for_json {
+            if let Some(explanation) = error_db.lookup(error_code) {
+                output["error_explanation"] =
+                    serde_json::to_value(explanation).unwrap_or(serde_json::Value::Null);
+            }
+        }
 
         let content = serde_json::to_string_pretty(&output)?;
         println!("{}", content);
