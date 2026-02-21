@@ -125,6 +125,7 @@ fn main() -> Result<()> {
             args.merge_config(&config);
             soroban_debugger::cli::commands::interactive(args, verbosity)
         }
+        Some(Commands::Tui(args)) => soroban_debugger::cli::commands::tui(args, verbosity),
         Some(Commands::Inspect(args)) => soroban_debugger::cli::commands::inspect(args, verbosity),
         Some(Commands::Optimize(args)) => {
             soroban_debugger::cli::commands::optimize(args, verbosity)
