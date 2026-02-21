@@ -1,19 +1,19 @@
 use crate::cli::args::{
-    CompareArgs, InspectArgs, InteractiveArgs, OptimizeArgs, ProfileArgs, RunArgs, SymbolicArgs,
-    TuiArgs, UpgradeCheckArgs, Verbosity,
+    CompareArgs, InspectArgs, InteractiveArgs, OptimizeArgs, ProfileArgs, RemoteArgs, RunArgs,
+    ServerArgs, SymbolicArgs, TuiArgs, UpgradeCheckArgs, Verbosity,
 };
 use crate::cli::args::{InspectArgs, InteractiveArgs, OptimizeArgs, ProfileArgs, RunArgs};
 use crate::debugger::engine::DebuggerEngine;
 use crate::debugger::instruction_pointer::StepMode;
 use crate::history::{check_regression, HistoryManager, RunHistory};
 use crate::logging;
+use crate::output::OutputConfig;
 use crate::repeat::RepeatRunner;
 use crate::runtime::executor::ContractExecutor;
 use crate::simulator::SnapshotLoader;
 use crate::ui::formatter::Formatter;
 use crate::ui::tui::DebuggerUI;
 use crate::{DebuggerError, Result};
-use anyhow::Context;
 use std::fs;
 use textplots::{Chart, Plot, Shape};
 
@@ -83,7 +83,12 @@ fn run_batch(args: &RunArgs, batch_file: &std::path::Path) -> Result<()> {
             "results": results,
             "summary": summary,
         });
-        println!("\n{}", serde_json::to_string_pretty(&output)?);
+        println!(
+            "\n{}",
+            serde_json::to_string_pretty(&output).map_err(|e| DebuggerError::FileError(
+                format!("Failed to serialize output: {}", e)
+            ))?
+        );
     }
 
     logging::log_execution_complete(&format!("{}/{} passed", summary.passed, summary.total));
@@ -167,7 +172,9 @@ pub fn run(args: RunArgs, verbosity: Verbosity) -> Result<()> {
         print_info(format!("Importing storage from: {:?}", import_path));
         let imported = crate::inspector::storage::StorageState::import_from_file(import_path)?;
         print_success(format!("Imported {} storage entries", imported.len()));
-        initial_storage = Some(serde_json::to_string(&imported)?);
+        initial_storage = Some(serde_json::to_string(&imported).map_err(|e| {
+            DebuggerError::StorageError(format!("Failed to serialize imported storage: {}", e))
+        })?);
     }
 
     if let Some(n) = args.repeat {
@@ -297,7 +304,7 @@ pub fn run(args: RunArgs, verbosity: Verbosity) -> Result<()> {
 
     if !args.storage_filter.is_empty() {
         let storage_filter = crate::inspector::storage::StorageFilter::new(&args.storage_filter)
-            .map_err(|e| anyhow::anyhow!("Invalid storage filter: {}", e))?;
+            .map_err(|e| DebuggerError::StorageError(format!("Invalid storage filter: {}", e)))?;
 
         print_info("\n--- Storage ---");
         let inspector = crate::inspector::StorageInspector::new();
@@ -410,7 +417,12 @@ pub fn run(args: RunArgs, verbosity: Verbosity) -> Result<()> {
             output["ledger_entries"] = ledger.to_json();
         }
 
-        println!("{}", serde_json::to_string_pretty(&output)?);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&output).map_err(|e| DebuggerError::FileError(
+                format!("Failed to serialize output: {}", e)
+            ))?
+        );
     }
 
     Ok(())
@@ -1056,16 +1068,10 @@ pub fn symbolic(args: SymbolicArgs, _verbosity: Verbosity) -> Result<()> {
     ));
     let wasm_bytes = fs::read(&args.contract).map_err(|e| {
         DebuggerError::WasmLoadError(format!(
-            "Failed to read WASM file: {:?}. Error: {}",
+            "Failed to read WASM file {:?}: {}",
             args.contract, e
         ))
     })?;
-    print_info(format!(
-        "Starting symbolic execution analysis for contract: {:?}",
-        args.contract
-    ));
-    let wasm_bytes = fs::read(&args.contract)
-        .with_context(|| format!("Failed to read WASM file {:?}", args.contract))?;
 
     let analyzer = crate::analyzer::symbolic::SymbolicAnalyzer::new();
     let report = analyzer.analyze(&wasm_bytes, &args.function)?;
@@ -1075,7 +1081,9 @@ pub fn symbolic(args: SymbolicArgs, _verbosity: Verbosity) -> Result<()> {
 
     let toml = analyzer.generate_scenario_toml(&report);
     if let Some(out) = args.output {
-        fs::write(&out, toml).context("Failed to write toml")?;
+        fs::write(&out, toml).map_err(|e| {
+            DebuggerError::FileError(format!("Failed to write toml to {:?}: {}", out, e))
+        })?;
         print_success(format!("Wrote scenario to {:?}", out));
     } else {
         println!("{}", toml);
@@ -1097,10 +1105,13 @@ fn run_instruction_stepping(
 
     loop {
         print!("(step) > ");
-        std::io::Write::flush(&mut std::io::stdout())?;
+        std::io::Write::flush(&mut std::io::stdout())
+            .map_err(|e| DebuggerError::FileError(format!("Failed to flush stdout: {}", e)))?;
 
         let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
+        std::io::stdin()
+            .read_line(&mut input)
+            .map_err(|e| DebuggerError::FileError(format!("Failed to read line: {}", e)))?;
         let input = input.trim().to_lowercase();
 
         match input.as_str() {
@@ -1156,9 +1167,13 @@ fn run_instruction_stepping(
             "i" | "info" => display_instruction_info(engine),
             "ctx" | "context" => {
                 print!("Enter context size (default 5): ");
-                std::io::Write::flush(&mut std::io::stdout())?;
+                std::io::Write::flush(&mut std::io::stdout()).map_err(|e| {
+                    DebuggerError::FileError(format!("Failed to flush stdout: {}", e))
+                })?;
                 let mut size_input = String::new();
-                std::io::stdin().read_line(&mut size_input)?;
+                std::io::stdin()
+                    .read_line(&mut size_input)
+                    .map_err(|e| DebuggerError::FileError(format!("Failed to read line: {}", e)))?;
                 let size = size_input.trim().parse().unwrap_or(5);
                 display_instruction_context(engine, size);
             }
@@ -1308,6 +1323,206 @@ pub fn show_budget_trend(contract: Option<&str>, function: Option<&str>) -> crat
                 "⚠️ ALERT: Memory usage regression detected! Increased by {:.2}% compared to the previous run.",
                 mem_reg
             ));
+        }
+    }
+
+    Ok(())
+}
+
+/// Start the debug server
+pub fn server(args: ServerArgs) -> Result<()> {
+    use crate::server::DebugServer;
+
+    print_info(format!("Starting debug server on port {}", args.port));
+
+    let mut server = DebugServer::new(args.port, args.token);
+
+    if let (Some(cert), Some(key)) = (args.tls_cert, args.tls_key) {
+        server = server.with_tls(cert, key);
+        print_info("TLS enabled");
+    }
+
+    print_success("Debug server started. Waiting for connections...");
+    print_info("Press Ctrl+C to stop the server");
+
+    server.start()?;
+
+    Ok(())
+}
+
+/// Connect to remote debug server and run interactive session
+pub fn remote(args: RemoteArgs, _verbosity: Verbosity) -> Result<()> {
+    use crate::client::RemoteClient;
+
+    print_info(format!(
+        "Connecting to remote debug server at {}",
+        args.remote
+    ));
+
+    let mut client = RemoteClient::connect(&args.remote, args.token.clone())?;
+    print_success("Connected to debug server");
+
+    // If contract and function are provided, execute directly
+    if let (Some(contract), Some(function)) = (&args.contract, &args.function) {
+        print_info(format!("Loading contract: {:?}", contract));
+        let _size = client.load_contract(&contract.to_string_lossy())?;
+
+        print_info(format!("Executing function: {}", function));
+        match client.execute(function, args.args.as_deref()) {
+            Ok(output) => {
+                print_success("Execution successful");
+                println!("Result: {}", output);
+            }
+            Err(e) => {
+                print_warning(format!("Execution failed: {}", e));
+                return Err(e);
+            }
+        }
+    } else {
+        // Interactive mode
+        print_info("Starting interactive remote debugging session");
+        print_info("Type 'help' for available commands");
+
+        loop {
+            print!("\n(remote-debug) ");
+            std::io::Write::flush(&mut std::io::stdout())
+                .map_err(|e| DebuggerError::FileError(format!("Failed to flush stdout: {}", e)))?;
+
+            let mut input = String::new();
+            std::io::stdin()
+                .read_line(&mut input)
+                .map_err(|e| DebuggerError::FileError(format!("Failed to read line: {}", e)))?;
+            let command = input.trim();
+
+            if command.is_empty() {
+                continue;
+            }
+
+            let parts: Vec<&str> = command.split_whitespace().collect();
+            match parts[0] {
+                "load" | "l" => {
+                    if parts.len() < 2 {
+                        print_warning("Usage: load <contract_path>");
+                    } else {
+                        match client.load_contract(parts[1]) {
+                            Ok(size) => print_success(format!("Contract loaded: {} bytes", size)),
+                            Err(e) => print_warning(format!("Failed to load contract: {}", e)),
+                        }
+                    }
+                }
+                "exec" | "e" => {
+                    if parts.len() < 2 {
+                        print_warning("Usage: exec <function> [args_json]");
+                    } else {
+                        let args = if parts.len() > 2 {
+                            Some(parts[2..].join(" "))
+                        } else {
+                            None
+                        };
+                        match client.execute(parts[1], args.as_deref()) {
+                            Ok(output) => println!("Result: {}", output),
+                            Err(e) => print_warning(format!("Execution failed: {}", e)),
+                        }
+                    }
+                }
+                "step" | "s" => match client.step() {
+                    Ok((paused, func, count)) => {
+                        println!("Step {}: function={:?}, paused={}", count, func, paused);
+                    }
+                    Err(e) => print_warning(format!("Step failed: {}", e)),
+                },
+                "continue" | "c" => match client.continue_execution() {
+                    Ok(completed) => println!("Execution completed: {}", completed),
+                    Err(e) => print_warning(format!("Continue failed: {}", e)),
+                },
+                "inspect" | "i" => match client.inspect() {
+                    Ok((func, count, paused, stack)) => {
+                        println!("Function: {:?}", func);
+                        println!("Step count: {}", count);
+                        println!("Paused: {}", paused);
+                        println!("Call stack: {:?}", stack);
+                    }
+                    Err(e) => print_warning(format!("Inspect failed: {}", e)),
+                },
+                "storage" => match client.get_storage() {
+                    Ok(storage) => println!("Storage: {}", storage),
+                    Err(e) => print_warning(format!("Get storage failed: {}", e)),
+                },
+                "stack" => match client.get_stack() {
+                    Ok(stack) => println!("Call stack: {:?}", stack),
+                    Err(e) => print_warning(format!("Get stack failed: {}", e)),
+                },
+                "budget" | "b" => match client.get_budget() {
+                    Ok((cpu, mem)) => {
+                        println!("CPU instructions: {}", cpu);
+                        println!("Memory bytes: {}", mem);
+                    }
+                    Err(e) => print_warning(format!("Get budget failed: {}", e)),
+                },
+                "break" => {
+                    if parts.len() < 2 {
+                        print_warning("Usage: break <function>");
+                    } else {
+                        match client.set_breakpoint(parts[1]) {
+                            Ok(_) => print_success(format!("Breakpoint set at {}", parts[1])),
+                            Err(e) => print_warning(format!("Set breakpoint failed: {}", e)),
+                        }
+                    }
+                }
+                "clear" => {
+                    if parts.len() < 2 {
+                        print_warning("Usage: clear <function>");
+                    } else {
+                        match client.clear_breakpoint(parts[1]) {
+                            Ok(_) => print_success(format!("Breakpoint cleared at {}", parts[1])),
+                            Err(e) => print_warning(format!("Clear breakpoint failed: {}", e)),
+                        }
+                    }
+                }
+                "list-breaks" => match client.list_breakpoints() {
+                    Ok(breaks) => {
+                        if breaks.is_empty() {
+                            println!("No breakpoints set");
+                        } else {
+                            for bp in breaks {
+                                println!("- {}", bp);
+                            }
+                        }
+                    }
+                    Err(e) => print_warning(format!("List breakpoints failed: {}", e)),
+                },
+                "ping" => match client.ping() {
+                    Ok(_) => print_success("Server is responsive"),
+                    Err(e) => print_warning(format!("Ping failed: {}", e)),
+                },
+                "help" | "h" => {
+                    println!("Remote debugger commands:");
+                    println!("  load <path>          Load a contract");
+                    println!("  exec <func> [args]    Execute a function");
+                    println!("  step | s             Step execution");
+                    println!("  continue | c          Continue execution");
+                    println!("  inspect | i           Inspect current state");
+                    println!("  storage               Show storage state");
+                    println!("  stack                 Show call stack");
+                    println!("  budget | b            Show budget usage");
+                    println!("  break <func>          Set breakpoint");
+                    println!("  clear <func>          Clear breakpoint");
+                    println!("  list-breaks           List breakpoints");
+                    println!("  ping                  Ping server");
+                    println!("  help | h              Show this help");
+                    println!("  quit | q              Exit");
+                }
+                "quit" | "q" | "exit" => {
+                    let _ = client.disconnect();
+                    break;
+                }
+                _ => {
+                    print_warning(format!(
+                        "Unknown command: {}. Type 'help' for available commands.",
+                        parts[0]
+                    ));
+                }
+            }
         }
     }
 

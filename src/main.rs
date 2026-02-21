@@ -1,4 +1,3 @@
-use anyhow::Result;
 use clap::{CommandFactory, Parser};
 use clap_complete::generate;
 use soroban_debugger::cli::{Cli, Commands, Verbosity};
@@ -143,6 +142,8 @@ fn main() -> miette::Result<()> {
         Some(Commands::Symbolic(args)) => {
             soroban_debugger::cli::commands::symbolic(args, verbosity)
         }
+        Some(Commands::Server(args)) => soroban_debugger::cli::commands::server(args),
+        Some(Commands::Remote(args)) => soroban_debugger::cli::commands::remote(args, verbosity),
         None => {
             if let Some(path) = cli.list_functions {
                 return soroban_debugger::cli::commands::inspect(
@@ -151,6 +152,7 @@ fn main() -> miette::Result<()> {
                         wasm: None,
                         functions: true,
                         metadata: false,
+                        dependency_graph: false,
                     },
                     verbosity,
                 );

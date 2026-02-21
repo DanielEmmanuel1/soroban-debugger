@@ -140,9 +140,9 @@ impl GasOptimizer {
                     .insert(function_name.to_string(), profile.clone());
 
                 // Return a normal error instead of crashing the whole CLI
-                return Err(anyhow::anyhow!(
-            "Contract execution panicked (likely budget exceeded). Try smaller inputs or optimize allocations."
-        ));
+                return Err(DebuggerError::ExecutionError(
+            "Contract execution panicked (likely budget exceeded). Try smaller inputs or optimize allocations.".to_string()
+        ).into());
             }
         }
 
