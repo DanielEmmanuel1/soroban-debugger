@@ -5,6 +5,7 @@
 soroban\-debug\-run \- Run a contract function with the debugger
 .SH SYNOPSIS
 \fBsoroban\-debug\-run\fR <\fB\-c\fR|\fB\-\-contract\fR> <\fB\-f\fR|\fB\-\-function\fR> [\fB\-a\fR|\fB\-\-args\fR] [\fB\-s\fR|\fB\-\-storage\fR] [\fB\-b\fR|\fB\-\-breakpoint\fR] [\fB\-\-network\-snapshot\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-\-json\fR] [\fB\-\-format\fR] [\fB\-\-show\-events\fR] [\fB\-\-show\-auth\fR] [\fB\-\-filter\-topic\fR] [\fB\-\-repeat\fR] [\fB\-\-storage\-filter\fR] [\fB\-\-instruction\-debug\fR] [\fB\-\-step\-instructions\fR] [\fB\-\-step\-mode\fR] [\fB\-\-dry\-run\fR] [\fB\-\-export\-storage\fR] [\fB\-\-import\-storage\fR] [\fB\-\-batch\-args\fR] [\fB\-\-generate\-test\fR] [\fB\-\-test\-output\-dir\fR] [\fB\-\-save\-output\fR] [\fB\-\-append\fR] [\fB\-\-error\-spec\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+\fBsoroban\-debug\-run\fR <\fB\-c\fR|\fB\-\-contract\fR> <\fB\-f\fR|\fB\-\-function\fR> [\fB\-a\fR|\fB\-\-args\fR] [\fB\-s\fR|\fB\-\-storage\fR] [\fB\-b\fR|\fB\-\-breakpoint\fR] [\fB\-\-network\-snapshot\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-\-format\fR] [\fB\-\-show\-events\fR] [\fB\-\-show\-auth\fR] [\fB\-\-json\fR] [\fB\-\-filter\-topic\fR] [\fB\-\-repeat\fR] [\fB\-\-storage\-filter\fR] [\fB\-\-instruction\-debug\fR] [\fB\-\-step\-instructions\fR] [\fB\-\-step\-mode\fR] [\fB\-\-dry\-run\fR] [\fB\-\-export\-storage\fR] [\fB\-\-import\-storage\fR] [\fB\-\-batch\-args\fR] [\fB\-\-generate\-test\fR] [\fB\-\-test\-output\-dir\fR] [\fB\-\-save\-output\fR] [\fB\-\-append\fR] [\fB\-h\fR|\fB\-\-help\fR] 
 .SH DESCRIPTION
 Run a contract function with the debugger
 .SH OPTIONS
@@ -41,6 +42,9 @@ Show contract events emitted during execution
 .TP
 \fB\-\-show\-auth\fR
 Show authorization tree during execution
+.TP
+\fB\-\-json\fR
+Output in JSON format
 .TP
 \fB\-\-filter\-topic\fR \fI<FILTER_TOPIC>\fR
 Filter events by topic

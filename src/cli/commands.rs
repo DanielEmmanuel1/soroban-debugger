@@ -13,9 +13,6 @@ use crate::ui::tui::DebuggerUI;
 use crate::Result;
 use anyhow::Context;
 use std::fs;
-use std::fs::OpenOptions;
-use std::io::Write;
-use std::path::Path;
 
 fn print_info(message: impl AsRef<str>) {
     println!("{}", Formatter::info(message));
@@ -206,12 +203,6 @@ pub fn run(args: RunArgs, _verbosity: Verbosity) -> Result<()> {
         executor.set_initial_storage(storage)?;
     }
 
-    let host = executor.host();
-    let initial_memory =
-        crate::inspector::budget::BudgetInspector::get_cpu_usage(host).memory_bytes;
-    let mut memory_tracker = crate::inspector::budget::MemoryTracker::new(initial_memory);
-    let mut instruction_counter = crate::inspector::instructions::InstructionCounter::new();
-
     let mut engine = DebuggerEngine::new(executor, args.breakpoint);
 
     if args.generate_test {
@@ -290,6 +281,7 @@ pub fn run(args: RunArgs, _verbosity: Verbosity) -> Result<()> {
     }
 
     memory_tracker.record_snapshot(engine.executor().host(), "after_execution");
+    let result = engine.execute(&args.function, parsed_args.as_deref())?;
     print_success("\n--- Execution Complete ---\n");
     print_success(format!("Result: {:?}", result));
     logging::log_execution_complete(&result);
@@ -304,10 +296,6 @@ pub fn run(args: RunArgs, _verbosity: Verbosity) -> Result<()> {
             storage_snapshot.len()
         ));
     }
-    let memory_summary = memory_tracker.finalize(engine.executor().host());
-    memory_summary.display();
-
-    instruction_counter.display();
 
     let mut json_events = None;
     if args.show_events {
@@ -362,14 +350,13 @@ pub fn run(args: RunArgs, _verbosity: Verbosity) -> Result<()> {
         json_auth = Some(auth_tree);
     }
 
-    let is_json_output = args.json
+    if args.json
         || args
             .format
             .as_deref()
             .map(|f| f.eq_ignore_ascii_case("json"))
-            .unwrap_or(false);
-
-    let output_content = if is_json_output {
+            .unwrap_or(false)
+    {
         let mut output = serde_json::json!({
             "result": result,
         });
@@ -456,6 +443,7 @@ pub fn run(args: RunArgs, _verbosity: Verbosity) -> Result<()> {
             "written to"
         };
         print_success(format!("Results {}: {:?}", mode, output_path));
+        println!("{}", serde_json::to_string_pretty(&output)?);
     }
 
     Ok(())
@@ -494,6 +482,47 @@ fn run_dry_run(args: &RunArgs) -> Result<()> {
     } else {
         None
     };
+
+    let mut executor = ContractExecutor::new(wasm_bytes)?;
+    if let Some(storage) = initial_storage {
+        executor.set_initial_storage(storage)?;
+    }
+
+    let storage_snapshot = executor.snapshot_storage()?;
+
+    let mut engine = DebuggerEngine::new(executor, args.breakpoint.clone());
+
+    print_info("\n[DRY RUN] --- Execution Start ---\n");
+    let result = engine.execute(&args.function, parsed_args.as_deref())?;
+    print_success("\n[DRY RUN] --- Execution Complete ---\n");
+    print_success(format!("[DRY RUN] Result: {:?}", result));
+
+    if args.show_events {
+        print_info("\n[DRY RUN] --- Events ---");
+        let events = engine.executor().get_events()?;
+        let filtered_events = if let Some(topic) = &args.filter_topic {
+            crate::inspector::events::EventInspector::filter_events(&events, topic)
+        } else {
+            events
+        };
+
+        if filtered_events.is_empty() {
+            print_warning("[DRY RUN] No events captured.");
+        } else {
+            for (i, event) in filtered_events.iter().enumerate() {
+                print_info(format!("[DRY RUN] Event #{}:", i));
+                print_info(format!(
+                    "[DRY RUN]   Contract: {}",
+                    event.contract_id.as_deref().unwrap_or("<none>")
+                ));
+                print_info(format!("[DRY RUN]   Topics: {:?}", event.topics));
+                print_info(format!("[DRY RUN]   Data: {}", event.data));
+            }
+        }
+    }
+
+    engine.executor_mut().restore_storage(&storage_snapshot)?;
+    print_success("\n[DRY RUN] Storage state restored (changes rolled back)");
 
     Ok(())
 }
@@ -609,9 +638,6 @@ pub fn inspect(args: InspectArgs, _verbosity: Verbosity) -> Result<()> {
 }
 
 /// Execute the list-functions command (shorthand for `inspect --functions`).
-///
-/// Constructs an [`InspectArgs`] with `functions: true` and delegates
-/// entirely to [`inspect`], guaranteeing identical output.
 pub fn list_functions(args: ListFunctionsArgs, verbosity: Verbosity) -> Result<()> {
     let inspect_args = InspectArgs {
         contract: args.contract,

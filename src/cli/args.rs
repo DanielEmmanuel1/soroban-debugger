@@ -57,6 +57,7 @@ impl Cli {
 }
 
 #[derive(Subcommand)]
+#[allow(clippy::large_enum_variant)]
 pub enum Commands {
     /// Run a contract function with the debugger
     Run(Box<RunArgs>),
@@ -113,6 +114,18 @@ pub struct RunArgs {
     /// Enable verbose output
     #[arg(short, long)]
     pub verbose: bool,
+
+    /// Output format (text, json)
+    #[arg(long)]
+    pub format: Option<String>,
+
+    /// Show contract events emitted during execution
+    #[arg(long)]
+    pub show_events: bool,
+
+    /// Show authorization tree during execution
+    #[arg(long)]
+    pub show_auth: bool,
 
     /// Output in JSON format
     #[arg(long)]

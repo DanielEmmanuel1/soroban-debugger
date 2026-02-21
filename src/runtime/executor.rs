@@ -7,11 +7,10 @@ use std::collections::HashMap;
 use std::time::Instant;
 use tracing::{info, warn};
 
-/// Result of a contract execution including timing information
-#[derive(Debug, serde::Serialize)]
-pub struct ExecutionResult {
-    pub result: String,
-    pub execution_time_ms: f64,
+/// Storage snapshot for dry-run rollback.
+#[derive(Debug, Clone)]
+pub struct StorageSnapshot {
+    _contract_address: Address,
 }
 
 /// Storage snapshot for dry-run rollback.
@@ -21,6 +20,7 @@ pub struct StorageSnapshot {
 }
 
 /// Executes Soroban contracts in a test environment
+/// Executes Soroban contracts in a test environment.
 pub struct ContractExecutor {
     env: Env,
     contract_address: Address,
@@ -44,8 +44,8 @@ impl ContractExecutor {
         })
     }
 
-    /// Execute a contract function
-    pub fn execute(&self, function: &str, args: Option<&str>) -> Result<ExecutionResult> {
+    /// Execute a contract function.
+    pub fn execute(&self, function: &str, args: Option<&str>) -> Result<String> {
         info!("Executing function: {}", function);
 
         let func_symbol = Symbol::new(&self.env, function);
@@ -62,12 +62,7 @@ impl ContractExecutor {
             SorobanVec::from_slice(&self.env, &parsed_args)
         };
 
-        // Start timing
-        let start = Instant::now();
-
-        // Call the contract
-        // try_invoke_contract returns Result<Result<Val, ConversionError>, Result<InvokeError, InvokeError>>
-        let invoke_result = self.env.try_invoke_contract::<Val, InvokeError>(
+        match self.env.try_invoke_contract::<Val, InvokeError>(
             &self.contract_address,
             &func_symbol,
             args_vec,
@@ -106,12 +101,36 @@ impl ContractExecutor {
                     execution_time_ms,
                 })
             }
+        ) {
+            Ok(Ok(val)) => Ok(format!("{:?}", val)),
+            Ok(Err(conv_err)) => Err(DebuggerError::ExecutionError(format!(
+                "Return value conversion failed: {:?}",
+                conv_err
+            ))
+            .into()),
+            Err(Ok(inv_err)) => match inv_err {
+                InvokeError::Contract(code) => {
+                    warn!("Contract returned error code: {}", code);
+                    Err(
+                        DebuggerError::ExecutionError(format!("Contract error code: {}", code))
+                            .into(),
+                    )
+                }
+                InvokeError::Abort => {
+                    warn!("Contract execution aborted");
+                    Err(
+                        DebuggerError::ExecutionError("Contract execution aborted".to_string())
+                            .into(),
+                    )
+                }
+            },
             Err(Err(inv_err)) => {
                 warn!("Invocation error conversion failed: {:?}", inv_err);
-                Ok(ExecutionResult {
-                    result: format!("Error (Invocation Conversion): {:?}", inv_err),
-                    execution_time_ms,
-                })
+                Err(DebuggerError::ExecutionError(format!(
+                    "Invocation error conversion failed: {:?}",
+                    inv_err
+                ))
+                .into())
             }
         }
     }
