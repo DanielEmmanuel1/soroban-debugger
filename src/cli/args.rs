@@ -101,6 +101,12 @@ pub enum Commands {
 
     /// Run symbolic execution to explore contract input space
     Symbolic(SymbolicArgs),
+
+    /// Start debug server for remote connections
+    Server(ServerArgs),
+
+    /// Connect to remote debug server
+    Remote(RemoteArgs),
 }
 
 #[derive(Parser)]
@@ -441,4 +447,46 @@ pub struct SymbolicArgs {
     /// Output file for the scenario TOML
     #[arg(short, long)]
     pub output: Option<PathBuf>,
+}
+
+#[derive(Parser)]
+pub struct ServerArgs {
+    /// Port to listen on
+    #[arg(short, long, default_value = "9229")]
+    pub port: u16,
+
+    /// Authentication token (optional, if not provided no auth required)
+    #[arg(short, long)]
+    pub token: Option<String>,
+
+    /// TLS certificate file path (optional)
+    #[arg(long)]
+    pub tls_cert: Option<PathBuf>,
+
+    /// TLS private key file path (optional)
+    #[arg(long)]
+    pub tls_key: Option<PathBuf>,
+}
+
+#[derive(Parser)]
+pub struct RemoteArgs {
+    /// Remote server address (e.g., localhost:9229)
+    #[arg(short, long)]
+    pub remote: String,
+
+    /// Authentication token (if required by server)
+    #[arg(short, long)]
+    pub token: Option<String>,
+
+    /// Path to the contract WASM file
+    #[arg(short, long)]
+    pub contract: Option<PathBuf>,
+
+    /// Function name to execute
+    #[arg(short, long)]
+    pub function: Option<String>,
+
+    /// Function arguments as JSON array
+    #[arg(short, long)]
+    pub args: Option<String>,
 }

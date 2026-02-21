@@ -1,6 +1,6 @@
 use crate::runtime::executor::ContractExecutor;
 use crate::Result;
-use anyhow::Context;
+use crate::DebuggerError;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -62,14 +62,14 @@ impl BatchExecutor {
     /// Load batch items from a JSON file
     pub fn load_batch_file<P: AsRef<Path>>(path: P) -> Result<Vec<BatchItem>> {
         let content = fs::read_to_string(path.as_ref())
-            .with_context(|| format!("Failed to read batch file: {:?}", path.as_ref()))?;
+            .map_err(|e| DebuggerError::FileError(format!("Failed to read batch file {:?}: {}", path.as_ref(), e)))?;
 
-        let items: Vec<BatchItem> = serde_json::from_str(&content).with_context(|| {
-            format!(
-                "Failed to parse batch file as JSON array: {:?}",
-                path.as_ref()
-            )
-        })?;
+        let items: Vec<BatchItem> = serde_json::from_str(&content)
+            .map_err(|e| DebuggerError::FileError(format!(
+                "Failed to parse batch file as JSON array {:?}: {}",
+                path.as_ref(),
+                e
+            )))?;
 
         Ok(items)
     }

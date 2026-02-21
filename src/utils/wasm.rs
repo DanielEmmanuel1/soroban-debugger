@@ -1,4 +1,4 @@
-use crate::Result;
+use crate::{Result, DebuggerError};
 use serde::{Deserialize, Serialize};
 use wasmparser::{Parser, Payload};
 
@@ -18,9 +18,11 @@ pub fn parse_functions(wasm_bytes: &[u8]) -> Result<Vec<String>> {
     let parser = Parser::new(0);
 
     for payload in parser.parse_all(wasm_bytes) {
-        if let Payload::ExportSection(reader) = payload? {
+        if let Payload::ExportSection(reader) = payload
+            .map_err(|e| DebuggerError::WasmLoadError(format!("Failed to parse WASM: {}", e)))? {
             for export in reader {
-                let export = export?;
+                let export = export
+                    .map_err(|e| DebuggerError::WasmLoadError(format!("Failed to read export: {}", e)))?;
                 if matches!(export.kind, wasmparser::ExternalKind::Func) {
                     functions.push(export.name.to_string());
                 }
@@ -70,10 +72,10 @@ pub fn parse_cross_contract_calls(wasm_bytes: &[u8]) -> Result<Vec<CrossContract
     let mut dedupe = BTreeSet::new();
 
     for payload in Parser::new(0).parse_all(wasm_bytes) {
-        match payload? {
+        match payload.map_err(|e| DebuggerError::WasmLoadError(format!("Failed to parse WASM: {}", e)))? {
             Payload::ImportSection(reader) => {
                 for import in reader {
-                    let import = import?;
+                    let import = import.map_err(|e| DebuggerError::WasmLoadError(format!("Failed to read import: {}", e)))?;
                     if let wasmparser::TypeRef::Func(_) = import.ty {
                         let current_index = imported_func_count;
                         imported_func_count += 1;
@@ -86,7 +88,7 @@ pub fn parse_cross_contract_calls(wasm_bytes: &[u8]) -> Result<Vec<CrossContract
             }
             Payload::ExportSection(reader) => {
                 for export in reader {
-                    let export = export?;
+                    let export = export.map_err(|e| DebuggerError::WasmLoadError(format!("Failed to read export: {}", e)))?;
                     if matches!(export.kind, wasmparser::ExternalKind::Func) {
                         export_names.insert(export.index, export.name.to_string());
                     }
@@ -100,9 +102,11 @@ pub fn parse_cross_contract_calls(wasm_bytes: &[u8]) -> Result<Vec<CrossContract
                     .cloned()
                     .unwrap_or_else(|| format!("func_{current_fn_index}"));
 
-                let mut reader = body.get_operators_reader()?;
+                let mut reader = body.get_operators_reader()
+                    .map_err(|e| DebuggerError::WasmLoadError(format!("Failed to get operators reader: {}", e)))?;
                 while !reader.eof() {
-                    if let Operator::Call { function_index } = reader.read()? {
+                    if let Operator::Call { function_index } = reader.read()
+                        .map_err(|e| DebuggerError::WasmLoadError(format!("Failed to read operator: {}", e)))? {
                         if let Some(host_fn_name) = cross_contract_imports.get(&function_index) {
                             let target = map_import_to_target(host_fn_name);
                             let key = format!("{caller}->{target}:{host_fn_name}");
@@ -133,7 +137,7 @@ pub fn get_module_info(wasm_bytes: &[u8]) -> Result<ModuleInfo> {
     let parser = Parser::new(0);
 
     for payload in parser.parse_all(wasm_bytes) {
-        let payload = payload?;
+        let payload = payload.map_err(|e| DebuggerError::WasmLoadError(format!("Failed to parse WASM: {}", e)))?;
         match &payload {
             Payload::Version { .. } => {}
             Payload::TypeSection(reader) => {
@@ -345,7 +349,7 @@ pub fn extract_contract_metadata(wasm_bytes: &[u8]) -> Result<ContractMetadata> 
     let parser = Parser::new(0);
 
     for payload in parser.parse_all(wasm_bytes) {
-        let Payload::CustomSection(reader) = payload? else {
+        let Payload::CustomSection(reader) = payload.map_err(|e| DebuggerError::WasmLoadError(format!("Failed to parse WASM: {}", e)))? else {
             continue;
         };
 
@@ -514,7 +518,7 @@ pub fn parse_function_signatures(wasm_bytes: &[u8]) -> Result<Vec<FunctionSignat
     let parser = Parser::new(0);
 
     for payload in parser.parse_all(wasm_bytes) {
-        let Payload::CustomSection(reader) = payload? else {
+        let Payload::CustomSection(reader) = payload.map_err(|e| DebuggerError::WasmLoadError(format!("Failed to parse WASM: {}", e)))? else {
             continue;
         };
 
