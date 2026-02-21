@@ -150,6 +150,14 @@ pub struct RunArgs {
     /// Execute contract in dry-run mode: simulate execution without persisting storage changes
     #[arg(long)]
     pub dry_run: bool,
+
+    /// Export storage state to JSON file after execution
+    #[arg(long)]
+    pub export_storage: Option<PathBuf>,
+
+    /// Import storage state from JSON file before execution
+    #[arg(long)]
+    pub import_storage: Option<PathBuf>,
 }
 
 impl RunArgs {
