@@ -105,7 +105,7 @@ fn handle_deprecations(cli: &mut Cli) {
     }
 }
 
-fn main() -> Result<()> {
+fn main() -> miette::Result<()> {
     Formatter::configure_colors_from_env();
 
     let mut cli = Cli::parse();
@@ -116,7 +116,7 @@ fn main() -> Result<()> {
 
     let config = soroban_debugger::config::Config::load_or_default();
 
-    let result = match cli.command {
+    match cli.command {
         Some(Commands::Run(mut args)) => {
             args.merge_config(&config);
             soroban_debugger::cli::commands::run(args, verbosity)
@@ -140,8 +140,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         Some(Commands::Profile(args)) => {
-            soroban_debugger::cli::commands::profile(args)?;
-            Ok(())
+            soroban_debugger::cli::commands::profile(args)
         }
         Some(Commands::Symbolic(args)) => {
             soroban_debugger::cli::commands::symbolic(args, verbosity)
@@ -154,17 +153,10 @@ fn main() -> Result<()> {
                 )
             } else {
                 let mut cmd = Cli::command();
-                cmd.print_help()?;
+                cmd.print_help().map_err(|e| miette::miette!(e))?;
                 println!();
                 Ok(())
             }
         }
-    };
-
-    if let Err(err) = result {
-        eprintln!("{}", Formatter::error(format!("Error: {err:#}")));
-        return Err(err);
     }
-
-    Ok(())
 }

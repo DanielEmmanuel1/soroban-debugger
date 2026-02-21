@@ -188,19 +188,27 @@ impl BreakpointManager {
     }
 
     /// Parse a condition string into a Condition object
-    pub fn parse_condition(s: &str) -> Result<Condition, String> {
+    pub fn parse_condition(s: &str) -> crate::Result<Condition> {
+        use crate::DebuggerError;
+        
         // storage[key] > value
         if s.starts_with("storage[") {
-            let end_bracket = s.find(']').ok_or("Missing closed bracket ']' in storage condition")?;
+            let end_bracket = s.find(']').ok_or_else(|| {
+                DebuggerError::BreakpointError("Missing closed bracket ']' in storage condition".to_string())
+            })?;
             let key = s[8..end_bracket].to_string();
             let rem = s[end_bracket+1..].trim();
             
-            let (op, val_str) = self::split_op_value(rem)?;
+            let (op, val_str) = self::split_op_value(rem).map_err(|e| {
+                DebuggerError::BreakpointError(format!("Invalid storage condition: {}", e))
+            })?;
             return Ok(Condition::Storage { key, operator: op, value: val_str });
         }
         
         // name > value
-        let (op, _) = self::find_operator(s).ok_or("No operator found (use ==, !=, >, <, >=, <=)")?;
+        let (op, _) = self::find_operator(s).ok_or_else(|| {
+            DebuggerError::BreakpointError("No operator found (use ==, !=, >, <, >=, <=)".to_string())
+        })?;
         let op_pos = s.find(op).unwrap();
         let name = s[..op_pos].trim().to_string();
         let val_str = s[op_pos + op.len()..].trim().to_string();
@@ -211,7 +219,7 @@ impl BreakpointManager {
             "<=" => Operator::Le,
             ">" => Operator::Gt,
             "<" => Operator::Lt,
-            _ => return Err(format!("Unsupported operator: {}", op)),
+            _ => return Err(DebuggerError::BreakpointError(format!("Unsupported operator: {}", op)).into()),
         };
         
         Ok(Condition::Argument { name, operator, value: val_str })
