@@ -91,9 +91,9 @@ fn run_batch(args: &RunArgs, batch_file: &std::path::Path) -> Result<()> {
     if summary.failed > 0 || summary.errors > 0 {
         return Err(DebuggerError::ExecutionError(format!(
             "Batch execution completed with failures: {} failed, {} errors",
-            summary.failed,
-            summary.errors
-        )).into());
+            summary.failed, summary.errors
+        ))
+        .into());
     }
 
     Ok(())
@@ -317,6 +317,48 @@ pub fn run(args: RunArgs, verbosity: Verbosity) -> Result<()> {
         json_auth = Some(auth_tree);
     }
 
+    let mut json_ledger = None;
+    if args.show_ledger {
+        print_info("\n--- Ledger Entries ---");
+        let mut ledger_inspector = crate::inspector::ledger::LedgerEntryInspector::new();
+        ledger_inspector.set_ttl_warning_threshold(args.ttl_warning_threshold);
+
+        // Extract ledger entries from storage snapshots
+        // Instance entries (from the after-snapshot, representing accessed state)
+        for (key, value) in &storage_after {
+            let storage_type = if key.starts_with("instance:") || key.starts_with("Instance") {
+                crate::inspector::ledger::StorageType::Instance
+            } else if key.starts_with("temp:") || key.starts_with("Temporary") {
+                crate::inspector::ledger::StorageType::Temporary
+            } else {
+                crate::inspector::ledger::StorageType::Persistent
+            };
+
+            let was_read = storage_before.contains_key(key);
+            let was_written = storage_after.get(key) != storage_before.get(key);
+
+            // Simulated TTL based on storage type defaults
+            let ttl = match storage_type {
+                crate::inspector::ledger::StorageType::Instance => 999_999,
+                crate::inspector::ledger::StorageType::Persistent => 120_960,
+                crate::inspector::ledger::StorageType::Temporary => 17_280,
+            };
+
+            ledger_inspector.add_entry(
+                key.clone(),
+                value.clone(),
+                storage_type,
+                ttl,
+                was_read || !was_written,
+                was_written,
+            );
+        }
+
+        ledger_inspector.display();
+        ledger_inspector.display_warnings();
+        json_ledger = Some(ledger_inspector);
+    }
+
     if args.json
         || args
             .format
@@ -363,6 +405,9 @@ pub fn run(args: RunArgs, verbosity: Verbosity) -> Result<()> {
                     .collect(),
             );
         }
+        if let Some(ref ledger) = json_ledger {
+            output["ledger_entries"] = ledger.to_json();
+        }
 
         println!("{}", serde_json::to_string_pretty(&output)
             .map_err(|e| DebuggerError::FileError(format!("Failed to serialize output: {}", e)))?);
@@ -376,7 +421,10 @@ fn run_dry_run(args: &RunArgs) -> Result<()> {
     print_info(format!("[DRY RUN] Loading contract: {:?}", args.contract));
 
     let wasm_bytes = fs::read(&args.contract).map_err(|e| {
-        DebuggerError::WasmLoadError(format!("Failed to read WASM file: {:?}. Error: {}", args.contract, e))
+        DebuggerError::WasmLoadError(format!(
+            "Failed to read WASM file: {:?}. Error: {}",
+            args.contract, e
+        ))
     })?;
 
     print_success(format!(
@@ -465,7 +513,10 @@ pub fn interactive(args: InteractiveArgs, _verbosity: Verbosity) -> Result<()> {
     logging::log_loading_contract(&args.contract.to_string_lossy());
 
     let wasm_bytes = fs::read(&args.contract).map_err(|e| {
-        DebuggerError::WasmLoadError(format!("Failed to read WASM file: {:?}. Error: {}", args.contract, e))
+        DebuggerError::WasmLoadError(format!(
+            "Failed to read WASM file: {:?}. Error: {}",
+            args.contract, e
+        ))
     })?;
 
     print_success(format!(
@@ -498,7 +549,10 @@ pub fn interactive(args: InteractiveArgs, _verbosity: Verbosity) -> Result<()> {
 /// Launch the full-screen TUI dashboard.
 pub fn tui(args: TuiArgs, _verbosity: Verbosity) -> Result<()> {
     let wasm_bytes = fs::read(&args.contract).map_err(|e| {
-        DebuggerError::WasmLoadError(format!("Failed to read WASM file: {:?}. Error: {}", args.contract, e))
+        DebuggerError::WasmLoadError(format!(
+            "Failed to read WASM file: {:?}. Error: {}",
+            args.contract, e
+        ))
     })?;
 
     if let Some(snapshot_path) = &args.network_snapshot {
@@ -539,7 +593,10 @@ pub fn inspect(args: InspectArgs, _verbosity: Verbosity) -> Result<()> {
     logging::log_loading_contract(&args.contract.to_string_lossy());
 
     let wasm_bytes = fs::read(&args.contract).map_err(|e| {
-        DebuggerError::WasmLoadError(format!("Failed to read WASM file: {:?}. Error: {}", args.contract, e))
+        DebuggerError::WasmLoadError(format!(
+            "Failed to read WASM file: {:?}. Error: {}",
+            args.contract, e
+        ))
     })?;
 
     let module_info = crate::utils::wasm::get_module_info(&wasm_bytes)?;
@@ -638,7 +695,10 @@ pub fn inspect(args: InspectArgs, _verbosity: Verbosity) -> Result<()> {
 /// Parse JSON arguments with validation.
 pub fn parse_args(json: &str) -> Result<String> {
     let value = serde_json::from_str::<serde_json::Value>(json).map_err(|e| {
-        DebuggerError::InvalidArguments(format!("Failed to parse JSON arguments: {}. Error: {}", json, e))
+        DebuggerError::InvalidArguments(format!(
+            "Failed to parse JSON arguments: {}. Error: {}",
+            json, e
+        ))
     })?;
 
     match value {
@@ -659,7 +719,10 @@ pub fn parse_args(json: &str) -> Result<String> {
 /// Parse JSON storage.
 pub fn parse_storage(json: &str) -> Result<String> {
     serde_json::from_str::<serde_json::Value>(json).map_err(|e| {
-        DebuggerError::StorageError(format!("Failed to parse JSON storage: {}. Error: {}", json, e))
+        DebuggerError::StorageError(format!(
+            "Failed to parse JSON storage: {}. Error: {}",
+            json, e
+        ))
     })?;
     Ok(json.to_string())
 }
@@ -673,7 +736,10 @@ pub fn optimize(args: OptimizeArgs, _verbosity: Verbosity) -> Result<()> {
     logging::log_loading_contract(&args.contract.to_string_lossy());
 
     let wasm_bytes = fs::read(&args.contract).map_err(|e| {
-        DebuggerError::WasmLoadError(format!("Failed to read WASM file: {:?}. Error: {}", args.contract, e))
+        DebuggerError::WasmLoadError(format!(
+            "Failed to read WASM file: {:?}. Error: {}",
+            args.contract, e
+        ))
     })?;
 
     print_success(format!(
@@ -740,10 +806,12 @@ pub fn optimize(args: OptimizeArgs, _verbosity: Verbosity) -> Result<()> {
     let markdown = optimizer.generate_markdown_report(&report);
 
     if let Some(output_path) = &args.output {
-        fs::write(output_path, &markdown)
-            .map_err(|e| {
-                DebuggerError::FileError(format!("Failed to write report to {:?}: {}", output_path, e))
-            })?;
+        fs::write(output_path, &markdown).map_err(|e| {
+            DebuggerError::FileError(format!(
+                "Failed to write report to {:?}: {}",
+                output_path, e
+            ))
+        })?;
         print_success(format!(
             "\nOptimization report written to: {:?}",
             output_path
@@ -762,7 +830,10 @@ pub fn profile(args: ProfileArgs) -> Result<()> {
 
     // Load WASM file
     let wasm_bytes = fs::read(&args.contract).map_err(|e| {
-        DebuggerError::WasmLoadError(format!("Failed to read WASM file: {:?}. Error: {}", args.contract, e))
+        DebuggerError::WasmLoadError(format!(
+            "Failed to read WASM file: {:?}. Error: {}",
+            args.contract, e
+        ))
     })?;
 
     println!("Contract loaded successfully ({} bytes)", wasm_bytes.len());
@@ -803,10 +874,12 @@ pub fn profile(args: ProfileArgs) -> Result<()> {
     let markdown = optimizer.generate_markdown_report(&report);
 
     if let Some(output_path) = &args.output {
-        fs::write(output_path, &markdown)
-            .map_err(|e| {
-                DebuggerError::FileError(format!("Failed to write report to {:?}: {}", output_path, e))
-            })?;
+        fs::write(output_path, &markdown).map_err(|e| {
+            DebuggerError::FileError(format!(
+                "Failed to write report to {:?}: {}",
+                output_path, e
+            ))
+        })?;
         println!("\nProfile report written to: {:?}", output_path);
     } else {
         println!("\n{}", markdown);
@@ -824,10 +897,16 @@ pub fn upgrade_check(args: UpgradeCheckArgs, _verbosity: Verbosity) -> Result<()
     logging::log_contract_comparison(&args.old.to_string_lossy(), &args.new.to_string_lossy());
 
     let old_bytes = fs::read(&args.old).map_err(|e| {
-        DebuggerError::WasmLoadError(format!("Failed to read old WASM file at {:?}: {}", args.old, e))
+        DebuggerError::WasmLoadError(format!(
+            "Failed to read old WASM file at {:?}: {}",
+            args.old, e
+        ))
     })?;
     let new_bytes = fs::read(&args.new).map_err(|e| {
-        DebuggerError::WasmLoadError(format!("Failed to read new WASM file at {:?}: {}", args.new, e))
+        DebuggerError::WasmLoadError(format!(
+            "Failed to read new WASM file at {:?}: {}",
+            args.new, e
+        ))
     })?;
 
     print_success(format!(
@@ -855,10 +934,12 @@ pub fn upgrade_check(args: UpgradeCheckArgs, _verbosity: Verbosity) -> Result<()
     let markdown = analyzer.generate_markdown_report(&report);
 
     if let Some(output_path) = &args.output {
-        fs::write(output_path, &markdown)
-            .map_err(|e| {
-                DebuggerError::FileError(format!("Failed to write report to {:?}: {}", output_path, e))
-            })?;
+        fs::write(output_path, &markdown).map_err(|e| {
+            DebuggerError::FileError(format!(
+                "Failed to write report to {:?}: {}",
+                output_path, e
+            ))
+        })?;
         print_success(format!(
             "\nCompatibility report written to: {:?}",
             output_path
@@ -884,10 +965,12 @@ pub fn compare(args: CompareArgs) -> Result<()> {
     let rendered = crate::compare::CompareEngine::render_report(&report);
 
     if let Some(output_path) = &args.output {
-        fs::write(output_path, &rendered)
-            .map_err(|e| {
-                DebuggerError::FileError(format!("Failed to write report to {:?}: {}", output_path, e))
-            })?;
+        fs::write(output_path, &rendered).map_err(|e| {
+            DebuggerError::FileError(format!(
+                "Failed to write report to {:?}: {}",
+                output_path, e
+            ))
+        })?;
         print_success(format!("Comparison report written to: {:?}", output_path));
     } else {
         println!("{}", rendered);
@@ -898,7 +981,13 @@ pub fn compare(args: CompareArgs) -> Result<()> {
 
 /// Execute the symbolic command.
 pub fn symbolic(args: SymbolicArgs, _verbosity: Verbosity) -> Result<()> {
-    print_info(format!("Starting symbolic execution analysis for contract: {:?}", args.contract));
+    print_info(format!(
+        "Starting symbolic execution analysis for contract: {:?}",
+        args.contract
+    ));|    print_info(format!(
+        "Starting symbolic execution analysis for contract: {:?}",
+        args.contract
+    ));
     let wasm_bytes = fs::read(&args.contract)
         .map_err(|e| DebuggerError::WasmLoadError(format!("Failed to read WASM file {:?}: {}", args.contract, e)))?;
 

@@ -51,6 +51,9 @@ Execute the contract call N times for stress testing
 \fB\-\-mock\fR \fI<CONTRACT_ID.function=return_value>\fR
 Mock cross\-contract return: CONTRACT_ID.function=return_value (repeatable)
 .TP
+\fB\-\-mock\fR \fI<CONTRACT_ID.function=return_value>\fR
+Mock cross\-contract return: CONTRACT_ID.function=return_value (repeatable)
+.TP
 \fB\-\-storage\-filter\fR \fI<PATTERN>\fR
 Filter storage output by key pattern (repeatable). Supports: prefix*       — match keys starting with prefix re:<regex>    — match keys by regex exact_key     — match key exactly
 .TP
@@ -83,6 +86,12 @@ Trigger a prominent alert when a critical storage key is modified (repeatable)
 .TP
 \fB\-\-expected\-hash\fR \fI<EXPECTED_HASH>\fR
 Expected SHA\-256 hash of the WASM file
+.TP
+\fB\-\-show\-ledger\fR
+Show ledger entries accessed during execution
+.TP
+\fB\-\-ttl\-warning\-threshold\fR \fI<TTL_WARNING_THRESHOLD>\fR [default: 1000]
+TTL warning threshold in ledger sequence numbers (default: 1000)
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help

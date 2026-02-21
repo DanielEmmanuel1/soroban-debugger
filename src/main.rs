@@ -138,9 +138,7 @@ fn main() -> miette::Result<()> {
             generate(args.shell, &mut cmd, "soroban-debug", &mut io::stdout());
             Ok(())
         }
-        Some(Commands::Profile(args)) => {
-            soroban_debugger::cli::commands::profile(args)
-        }
+        Some(Commands::Profile(args)) => soroban_debugger::cli::commands::profile(args),
         Some(Commands::Symbolic(args)) => {
             soroban_debugger::cli::commands::symbolic(args, verbosity)
         }
