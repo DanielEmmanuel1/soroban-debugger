@@ -35,10 +35,25 @@ pub struct Cli {
     #[arg(short, long, global = true)]
     pub verbose: bool,
 
-    #[command(subcommand)]
-    pub command: Commands,
-}
+    /// Show historical budget trend visualization
+    #[arg(long)]
+    pub budget_trend: bool,
 
+    /// Filter budget trend by contract hash
+    #[arg(long)]
+    pub trend_contract: Option<String>,
+
+    /// Filter budget trend by function name
+    #[arg(long)]
+    pub trend_function: Option<String>,
+
+    #[command(subcommand)]
+    pub command: Option<Commands>,
+
+    /// Show detailed version information
+    #[arg(long)]
+    pub version_verbose: bool,
+}
 impl Cli {
     /// Get the effective verbosity level
     pub fn verbosity(&self) -> Verbosity {
@@ -53,6 +68,7 @@ impl Cli {
 }
 
 #[derive(Subcommand)]
+#[allow(clippy::large_enum_variant)]
 pub enum Commands {
     /// Run a contract function with the debugger
     Run(RunArgs),
@@ -86,6 +102,10 @@ pub struct RunArgs {
     #[arg(short, long)]
     pub contract: PathBuf,
 
+    /// Deprecated: use --contract instead
+    #[arg(long, hide = true, alias = "wasm", alias = "contract-path")]
+    pub wasm: Option<PathBuf>,
+
     /// Function name to execute
     #[arg(short, long)]
     pub function: String,
@@ -105,6 +125,10 @@ pub struct RunArgs {
     /// Network snapshot file to load before execution
     #[arg(long)]
     pub network_snapshot: Option<PathBuf>,
+
+    /// Deprecated: use --network-snapshot instead
+    #[arg(long, hide = true, alias = "snapshot")]
+    pub snapshot: Option<PathBuf>,
 
     /// Enable verbose output
     #[arg(short, long)]
@@ -134,6 +158,10 @@ pub struct RunArgs {
     #[arg(long)]
     pub repeat: Option<u32>,
 
+    /// Mock cross-contract return: CONTRACT_ID.function=return_value (repeatable)
+    #[arg(long, value_name = "CONTRACT_ID.function=return_value")]
+    pub mock: Vec<String>,
+
     /// Filter storage output by key pattern (repeatable). Supports:
     ///   prefix*       — match keys starting with prefix
     ///   re:<regex>    — match keys by regex
@@ -156,6 +184,13 @@ pub struct RunArgs {
     #[arg(long)]
     pub dry_run: bool,
 
+    /// Export storage state to JSON file after execution
+    #[arg(long)]
+    pub export_storage: Option<PathBuf>,
+
+    /// Import storage state from JSON file before execution
+    #[arg(long)]
+    pub import_storage: Option<PathBuf>,
     /// Path to JSON file containing array of argument sets for batch execution
     #[arg(long)]
     pub batch_args: Option<PathBuf>,
@@ -197,9 +232,17 @@ pub struct InteractiveArgs {
     #[arg(short, long)]
     pub contract: PathBuf,
 
+    /// Deprecated: use --contract instead
+    #[arg(long, hide = true, alias = "wasm", alias = "contract-path")]
+    pub wasm: Option<PathBuf>,
+
     /// Network snapshot file to load before starting interactive session
     #[arg(long)]
     pub network_snapshot: Option<PathBuf>,
+
+    /// Deprecated: use --network-snapshot instead
+    #[arg(long, hide = true, alias = "snapshot")]
+    pub snapshot: Option<PathBuf>,
 }
 
 impl InteractiveArgs {
@@ -213,6 +256,10 @@ pub struct InspectArgs {
     /// Path to the contract WASM file
     #[arg(short, long)]
     pub contract: PathBuf,
+
+    /// Deprecated: use --contract instead
+    #[arg(long, hide = true, alias = "wasm", alias = "contract-path")]
+    pub wasm: Option<PathBuf>,
 
     /// Show exported functions
     #[arg(long)]
@@ -228,6 +275,10 @@ pub struct OptimizeArgs {
     /// Path to the contract WASM file
     #[arg(short, long)]
     pub contract: PathBuf,
+
+    /// Deprecated: use --contract instead
+    #[arg(long, hide = true, alias = "wasm", alias = "contract-path")]
+    pub wasm: Option<PathBuf>,
 
     /// Function name to analyze (can be specified multiple times)
     #[arg(short, long)]
@@ -248,6 +299,10 @@ pub struct OptimizeArgs {
     /// Network snapshot file to load before analysis
     #[arg(long)]
     pub network_snapshot: Option<PathBuf>,
+
+    /// Deprecated: use --network-snapshot instead
+    #[arg(long, hide = true, alias = "snapshot")]
+    pub snapshot: Option<PathBuf>,
 }
 
 #[derive(Parser)]
@@ -329,6 +384,10 @@ pub struct ProfileArgs {
     /// Path to the contract WASM file
     #[arg(short, long)]
     pub contract: PathBuf,
+
+    /// Deprecated: use --contract instead
+    #[arg(long, hide = true, alias = "wasm", alias = "contract-path")]
+    pub wasm: Option<PathBuf>,
 
     /// Function name to execute
     #[arg(short, long)]
