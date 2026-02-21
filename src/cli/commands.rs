@@ -189,6 +189,21 @@ pub fn run(args: RunArgs, _verbosity: Verbosity) -> Result<()> {
 
     let mut engine = DebuggerEngine::new(executor, args.breakpoint);
 
+    if args.generate_test {
+        engine.enable_test_generation(args.test_output_dir);
+    }
+
+    // Execute with debugging
+    println!("\n--- Execution Start ---\n");
+    let execution_result = engine.execute(&args.function, parsed_args.as_deref())?;
+    println!("\n--- Execution Complete ---\n");
+
+    if args.json {
+        let json_output = serde_json::json!({
+            "result": execution_result.result,
+            "execution_time_ms": execution_result.execution_time_ms,
+        });
+        println!("{}", serde_json::to_string_pretty(&json_output)?);
     if args.instruction_debug {
         print_info("Enabling instruction-level debugging...");
         engine.enable_instruction_debug(&wasm_bytes)?;
@@ -424,49 +439,9 @@ fn run_dry_run(args: &RunArgs) -> Result<()> {
     let initial_storage = if let Some(storage_json) = &args.storage {
         Some(parse_storage(storage_json)?)
     } else {
-        None
-    };
-
-    let mut executor = ContractExecutor::new(wasm_bytes)?;
-    if let Some(storage) = initial_storage {
-        executor.set_initial_storage(storage)?;
+        println!("Result: {}", execution_result.result);
+        println!("Execution Time: {:.2}ms", execution_result.execution_time_ms);
     }
-
-    let storage_snapshot = executor.snapshot_storage()?;
-
-    let mut engine = DebuggerEngine::new(executor, args.breakpoint.clone());
-
-    print_info("\n[DRY RUN] --- Execution Start ---\n");
-    let result = engine.execute(&args.function, parsed_args.as_deref())?;
-    print_success("\n[DRY RUN] --- Execution Complete ---\n");
-    print_success(format!("[DRY RUN] Result: {:?}", result));
-
-    if args.show_events {
-        print_info("\n[DRY RUN] --- Events ---");
-        let events = engine.executor().get_events()?;
-        let filtered_events = if let Some(topic) = &args.filter_topic {
-            crate::inspector::events::EventInspector::filter_events(&events, topic)
-        } else {
-            events
-        };
-
-        if filtered_events.is_empty() {
-            print_warning("[DRY RUN] No events captured.");
-        } else {
-            for (i, event) in filtered_events.iter().enumerate() {
-                print_info(format!("[DRY RUN] Event #{}:", i));
-                print_info(format!(
-                    "[DRY RUN]   Contract: {}",
-                    event.contract_id.as_deref().unwrap_or("<none>")
-                ));
-                print_info(format!("[DRY RUN]   Topics: {:?}", event.topics));
-                print_info(format!("[DRY RUN]   Data: {}", event.data));
-            }
-        }
-    }
-
-    engine.executor_mut().restore_storage(&storage_snapshot)?;
-    print_success("\n[DRY RUN] Storage state restored (changes rolled back)");
 
     Ok(())
 }

@@ -114,19 +114,7 @@ pub struct RunArgs {
     #[arg(short, long)]
     pub verbose: bool,
 
-    /// Output format (text, json)
-    #[arg(long)]
-    pub format: Option<String>,
-
-    /// Show contract events emitted during execution
-    #[arg(long)]
-    pub show_events: bool,
-
-    /// Show authorization tree during execution
-    #[arg(long)]
-    pub show_auth: bool,
-
-    /// Output format as JSON
+    /// Output in JSON format
     #[arg(long)]
     pub json: bool,
 
@@ -171,6 +159,13 @@ pub struct RunArgs {
     #[arg(long)]
     pub batch_args: Option<PathBuf>,
 
+    /// Automatically generate a Rust unit test from this execution
+    #[arg(long)]
+    pub generate_test: bool,
+
+    /// Directory to write generated tests to
+    #[arg(long, default_value = "tests/generated")]
+    pub test_output_dir: PathBuf,
     /// Save execution results to file
     #[arg(long)]
     pub save_output: Option<PathBuf>,
