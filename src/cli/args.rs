@@ -203,6 +203,9 @@ pub struct RunArgs {
     #[arg(long)]
     pub batch_args: Option<PathBuf>,
 
+    /// Watch the WASM file for changes and automatically re-run
+    #[arg(long)]
+    pub watch: bool,
     /// Execution timeout in seconds (default: 30)
     #[arg(long, default_value = "30")]
     pub timeout: u64,
