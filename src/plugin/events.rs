@@ -9,54 +9,46 @@ pub enum ExecutionEvent {
         function: String,
         args: Option<String>,
     },
-    
+
     /// Fired after a contract function is executed
     AfterFunctionCall {
         function: String,
         result: Result<String, String>,
         duration: Duration,
     },
-    
+
     /// Fired when an instruction is about to be executed
-    BeforeInstruction {
-        pc: u32,
-        instruction: String,
-    },
-    
+    BeforeInstruction { pc: u32, instruction: String },
+
     /// Fired after an instruction is executed
-    AfterInstruction {
-        pc: u32,
-        instruction: String,
-    },
-    
+    AfterInstruction { pc: u32, instruction: String },
+
     /// Fired when a breakpoint is hit
     BreakpointHit {
         function: String,
         condition: Option<String>,
     },
-    
+
     /// Fired when execution is paused
-    ExecutionPaused {
-        reason: String,
-    },
-    
+    ExecutionPaused { reason: String },
+
     /// Fired when execution is resumed
     ExecutionResumed,
-    
+
     /// Fired when storage is accessed
     StorageAccess {
         operation: StorageOperation,
         key: String,
         value: Option<String>,
     },
-    
+
     /// Fired when diagnostic events occur
     DiagnosticEvent {
         contract_id: Option<String>,
         topics: Vec<String>,
         data: String,
     },
-    
+
     /// Fired when an error occurs
     Error {
         message: String,
@@ -78,13 +70,13 @@ pub enum StorageOperation {
 pub struct EventContext {
     /// Current call stack depth
     pub stack_depth: usize,
-    
+
     /// Current program counter (if in instruction mode)
     pub program_counter: Option<u32>,
-    
+
     /// Whether execution is paused
     pub is_paused: bool,
-    
+
     /// Custom context data that plugins can use to store state
     pub custom_data: std::collections::HashMap<String, String>,
 }

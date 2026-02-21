@@ -152,6 +152,7 @@ fn main() -> miette::Result<()> {
                         wasm: None,
                         functions: true,
                         metadata: false,
+                        expected_hash: None,
                         dependency_graph: false,
                     },
                     verbosity,

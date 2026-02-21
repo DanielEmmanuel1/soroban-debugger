@@ -2,7 +2,6 @@ use crate::cli::args::{
     CompareArgs, InspectArgs, InteractiveArgs, OptimizeArgs, ProfileArgs, RemoteArgs, RunArgs,
     ServerArgs, SymbolicArgs, TuiArgs, UpgradeCheckArgs, Verbosity,
 };
-use crate::cli::args::{InspectArgs, InteractiveArgs, OptimizeArgs, ProfileArgs, RunArgs};
 use crate::debugger::engine::DebuggerEngine;
 use crate::debugger::instruction_pointer::StepMode;
 use crate::history::{check_regression, HistoryManager, RunHistory};
@@ -14,6 +13,7 @@ use crate::simulator::SnapshotLoader;
 use crate::ui::formatter::Formatter;
 use crate::ui::tui::DebuggerUI;
 use crate::{DebuggerError, Result};
+use miette::WrapErr;
 use std::fs;
 use textplots::{Chart, Plot, Shape};
 
@@ -138,7 +138,7 @@ pub fn run(args: RunArgs, verbosity: Verbosity) -> Result<()> {
         wasm_bytes.len()
     ));
 
-    if args.verbose || _verbosity == Verbosity::Verbose {
+    if args.verbose || verbosity == Verbosity::Verbose {
         print_info(format!("SHA-256: {}", wasm_hash));
         if args.expected_hash.is_some() {
             print_success("Checksum verified ✓");

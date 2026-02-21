@@ -1,10 +1,9 @@
 /// Tests for the plugin system
 use soroban_debugger::plugin::{
-    EventContext, ExecutionEvent, InspectorPlugin, PluginCapabilities, PluginCommand,
-    PluginError, PluginLoader, PluginManifest, PluginRegistry, PluginResult,
+    EventContext, ExecutionEvent, InspectorPlugin, PluginCapabilities, PluginCommand, PluginError,
+    PluginLoader, PluginManifest, PluginRegistry, PluginResult,
 };
 use std::any::Any;
-use std::path::PathBuf;
 use tempfile::TempDir;
 
 /// Mock plugin for testing
@@ -54,19 +53,21 @@ impl InspectorPlugin for MockPlugin {
         Ok(())
     }
 
-    fn on_event(&mut self, _event: &ExecutionEvent, _context: &mut EventContext) -> PluginResult<()> {
+    fn on_event(
+        &mut self,
+        _event: &ExecutionEvent,
+        _context: &mut EventContext,
+    ) -> PluginResult<()> {
         self.event_count += 1;
         Ok(())
     }
 
     fn commands(&self) -> Vec<PluginCommand> {
-        vec![
-            PluginCommand {
-                name: "test-command".to_string(),
-                description: "A test command".to_string(),
-                arguments: vec![],
-            }
-        ]
+        vec![PluginCommand {
+            name: "test-command".to_string(),
+            description: "A test command".to_string(),
+            arguments: vec![],
+        }]
     }
 
     fn execute_command(&mut self, command: &str, _args: &[String]) -> PluginResult<String> {
@@ -125,14 +126,14 @@ fn test_plugin_manifest_validation() {
 #[test]
 fn test_mock_plugin_creation() {
     let mut plugin = MockPlugin::new("test");
-    
+
     assert_eq!(plugin.metadata().name, "test");
     assert!(!plugin.initialized);
-    
+
     // Initialize
     assert!(plugin.initialize().is_ok());
     assert!(plugin.initialized);
-    
+
     // Shutdown
     assert!(plugin.shutdown().is_ok());
     assert!(!plugin.initialized);
@@ -142,18 +143,18 @@ fn test_mock_plugin_creation() {
 fn test_mock_plugin_events() {
     let mut plugin = MockPlugin::new("test");
     let mut context = EventContext::new();
-    
+
     assert_eq!(plugin.event_count, 0);
-    
+
     // Send some events
     let event = ExecutionEvent::BeforeFunctionCall {
         function: "test".to_string(),
         args: None,
     };
-    
+
     assert!(plugin.on_event(&event, &mut context).is_ok());
     assert_eq!(plugin.event_count, 1);
-    
+
     assert!(plugin.on_event(&event, &mut context).is_ok());
     assert_eq!(plugin.event_count, 2);
 }
@@ -161,16 +162,16 @@ fn test_mock_plugin_events() {
 #[test]
 fn test_mock_plugin_commands() {
     let mut plugin = MockPlugin::new("test");
-    
+
     let commands = plugin.commands();
     assert_eq!(commands.len(), 1);
     assert_eq!(commands[0].name, "test-command");
-    
+
     // Execute valid command
     let result = plugin.execute_command("test-command", &[]);
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), "Command executed");
-    
+
     // Execute invalid command
     let result = plugin.execute_command("invalid", &[]);
     assert!(result.is_err());
@@ -180,21 +181,21 @@ fn test_mock_plugin_commands() {
 fn test_mock_plugin_hot_reload() {
     let mut plugin = MockPlugin::new("test");
     let mut context = EventContext::new();
-    
+
     // Process some events
     let event = ExecutionEvent::ExecutionResumed;
     for _ in 0..5 {
         plugin.on_event(&event, &mut context).unwrap();
     }
     assert_eq!(plugin.event_count, 5);
-    
+
     // Prepare for reload
     let state = plugin.prepare_reload().unwrap();
-    
+
     // Create new plugin and restore state
     let mut new_plugin = MockPlugin::new("test");
     assert_eq!(new_plugin.event_count, 0);
-    
+
     assert!(new_plugin.restore_from_reload(state).is_ok());
     assert_eq!(new_plugin.event_count, 5);
 }
@@ -203,7 +204,7 @@ fn test_mock_plugin_hot_reload() {
 fn test_plugin_registry_creation() {
     let temp_dir = TempDir::new().unwrap();
     let registry = PluginRegistry::with_plugin_dir(temp_dir.path().to_path_buf());
-    
+
     assert!(registry.is_ok());
     let registry = registry.unwrap();
     assert_eq!(registry.plugin_count(), 0);
@@ -213,7 +214,7 @@ fn test_plugin_registry_creation() {
 fn test_plugin_registry_statistics() {
     let temp_dir = TempDir::new().unwrap();
     let registry = PluginRegistry::with_plugin_dir(temp_dir.path().to_path_buf()).unwrap();
-    
+
     let stats = registry.statistics();
     assert_eq!(stats.total, 0);
     assert_eq!(stats.hooks_execution, 0);
@@ -224,7 +225,7 @@ fn test_plugin_registry_statistics() {
 fn test_plugin_loader_default_dir() {
     let dir = PluginLoader::default_plugin_dir();
     assert!(dir.is_ok());
-    
+
     let path = dir.unwrap();
     assert!(path.to_string_lossy().contains(".soroban-debug"));
     assert!(path.to_string_lossy().contains("plugins"));
@@ -234,15 +235,15 @@ fn test_plugin_loader_default_dir() {
 fn test_plugin_loader_discovery() {
     let temp_dir = TempDir::new().unwrap();
     let loader = PluginLoader::new(temp_dir.path().to_path_buf());
-    
+
     // No plugins yet
     let manifests = loader.discover_plugins();
     assert_eq!(manifests.len(), 0);
-    
+
     // Create a plugin directory with manifest
     let plugin_dir = temp_dir.path().join("test-plugin");
     std::fs::create_dir_all(&plugin_dir).unwrap();
-    
+
     let manifest = PluginManifest {
         name: "test-plugin".to_string(),
         version: "1.0.0".to_string(),
@@ -254,10 +255,10 @@ fn test_plugin_loader_discovery() {
         library: "test.so".to_string(),
         dependencies: vec![],
     };
-    
+
     let manifest_content = toml::to_string(&manifest).unwrap();
     std::fs::write(plugin_dir.join("plugin.toml"), manifest_content).unwrap();
-    
+
     // Should discover the plugin
     let manifests = loader.discover_plugins();
     assert_eq!(manifests.len(), 1);
@@ -266,18 +267,20 @@ fn test_plugin_loader_discovery() {
 #[test]
 fn test_event_context() {
     let mut context = EventContext::new();
-    
+
     assert_eq!(context.stack_depth, 0);
     assert!(context.program_counter.is_none());
     assert!(!context.is_paused);
     assert!(context.custom_data.is_empty());
-    
+
     // Modify context
     context.stack_depth = 5;
     context.program_counter = Some(42);
     context.is_paused = true;
-    context.custom_data.insert("key".to_string(), "value".to_string());
-    
+    context
+        .custom_data
+        .insert("key".to_string(), "value".to_string());
+
     assert_eq!(context.stack_depth, 5);
     assert_eq!(context.program_counter, Some(42));
     assert!(context.is_paused);
@@ -287,54 +290,54 @@ fn test_event_context() {
 #[test]
 fn test_execution_events() {
     use std::time::Duration;
-    
+
     // Test different event variants
     let event1 = ExecutionEvent::BeforeFunctionCall {
         function: "test".to_string(),
         args: Some("[]".to_string()),
     };
-    
+
     let event2 = ExecutionEvent::AfterFunctionCall {
         function: "test".to_string(),
         result: Ok("success".to_string()),
         duration: Duration::from_millis(100),
     };
-    
+
     let event3 = ExecutionEvent::BreakpointHit {
         function: "test".to_string(),
         condition: Some("x > 10".to_string()),
     };
-    
+
     let event4 = ExecutionEvent::Error {
         message: "Test error".to_string(),
         context: Some("Function: test".to_string()),
     };
-    
+
     // Events should be created successfully
     let mut plugin = MockPlugin::new("test");
     let mut context = EventContext::new();
-    
+
     assert!(plugin.on_event(&event1, &mut context).is_ok());
     assert!(plugin.on_event(&event2, &mut context).is_ok());
     assert!(plugin.on_event(&event3, &mut context).is_ok());
     assert!(plugin.on_event(&event4, &mut context).is_ok());
-    
+
     assert_eq!(plugin.event_count, 4);
 }
 
 #[test]
 fn test_plugin_capabilities() {
     let mut caps = PluginCapabilities::default();
-    
+
     assert!(!caps.hooks_execution);
     assert!(!caps.provides_commands);
     assert!(!caps.provides_formatters);
     assert!(!caps.supports_hot_reload);
-    
+
     // Modify capabilities
     caps.hooks_execution = true;
     caps.provides_commands = true;
-    
+
     assert!(caps.hooks_execution);
     assert!(caps.provides_commands);
 }
@@ -350,7 +353,7 @@ fn test_plugin_error_types() {
         found: "0.9.0".to_string(),
     };
     let err6 = PluginError::DependencyError("test".to_string());
-    
+
     // All errors should display properly
     assert!(err1.to_string().contains("initialization"));
     assert!(err2.to_string().contains("execution"));

@@ -10,19 +10,19 @@ pub type PluginResult<T> = Result<T, PluginError>;
 pub enum PluginError {
     /// Plugin initialization failed
     InitializationFailed(String),
-    
+
     /// Plugin execution failed
     ExecutionFailed(String),
-    
+
     /// Plugin not found
     NotFound(String),
-    
+
     /// Invalid plugin
     Invalid(String),
-    
+
     /// Version mismatch
     VersionMismatch { required: String, found: String },
-    
+
     /// Dependency error
     DependencyError(String),
 }
@@ -30,12 +30,18 @@ pub enum PluginError {
 impl std::fmt::Display for PluginError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PluginError::InitializationFailed(msg) => write!(f, "Plugin initialization failed: {}", msg),
+            PluginError::InitializationFailed(msg) => {
+                write!(f, "Plugin initialization failed: {}", msg)
+            }
             PluginError::ExecutionFailed(msg) => write!(f, "Plugin execution failed: {}", msg),
             PluginError::NotFound(msg) => write!(f, "Plugin not found: {}", msg),
             PluginError::Invalid(msg) => write!(f, "Invalid plugin: {}", msg),
             PluginError::VersionMismatch { required, found } => {
-                write!(f, "Version mismatch: required {}, found {}", required, found)
+                write!(
+                    f,
+                    "Version mismatch: required {}, found {}",
+                    required, found
+                )
             }
             PluginError::DependencyError(msg) => write!(f, "Dependency error: {}", msg),
         }
@@ -49,10 +55,10 @@ impl std::error::Error for PluginError {}
 pub struct PluginCommand {
     /// Command name
     pub name: String,
-    
+
     /// Command description
     pub description: String,
-    
+
     /// Command arguments (name, description, required)
     pub arguments: Vec<(String, String, bool)>,
 }
@@ -62,44 +68,44 @@ pub struct PluginCommand {
 pub struct OutputFormatter {
     /// Formatter name
     pub name: String,
-    
+
     /// Supported output types
     pub supported_types: Vec<String>,
 }
 
 /// The main trait that all plugins must implement
-/// 
+///
 /// This trait defines the interface for plugins to interact with the debugger.
 /// Plugins can hook into execution events, provide custom CLI commands, and
 /// add custom output formatters.
-/// 
+///
 /// # Safety
-/// 
+///
 /// This trait is designed to be implemented in dynamically loaded libraries.
 /// All methods have default implementations to maintain backward compatibility
 /// when the API evolves.
 pub trait InspectorPlugin: Send + Sync {
     /// Get plugin metadata
     fn metadata(&self) -> PluginManifest;
-    
+
     /// Initialize the plugin
-    /// 
+    ///
     /// Called once when the plugin is loaded. Use this to set up any
     /// resources or state the plugin needs.
     fn initialize(&mut self) -> PluginResult<()> {
         Ok(())
     }
-    
+
     /// Shutdown the plugin
-    /// 
+    ///
     /// Called when the plugin is being unloaded. Use this to clean up
     /// any resources.
     fn shutdown(&mut self) -> PluginResult<()> {
         Ok(())
     }
-    
+
     /// Handle an execution event
-    /// 
+    ///
     /// Called whenever an execution event occurs. The plugin can inspect
     /// the event and context, and optionally modify the context for other
     /// plugins.
@@ -107,53 +113,53 @@ pub trait InspectorPlugin: Send + Sync {
         let _ = (event, context); // Suppress unused warnings
         Ok(())
     }
-    
+
     /// Get custom CLI commands provided by this plugin
     fn commands(&self) -> Vec<PluginCommand> {
         Vec::new()
     }
-    
+
     /// Execute a custom CLI command
-    /// 
+    ///
     /// Called when a user invokes one of the plugin's custom commands.
     /// The `args` parameter contains the command arguments as key-value pairs.
     fn execute_command(&mut self, command: &str, args: &[String]) -> PluginResult<String> {
         let _ = (command, args);
         Err(PluginError::ExecutionFailed(
-            "Command not implemented".to_string()
+            "Command not implemented".to_string(),
         ))
     }
-    
+
     /// Get custom output formatters provided by this plugin
     fn formatters(&self) -> Vec<OutputFormatter> {
         Vec::new()
     }
-    
+
     /// Format output using a custom formatter
-    /// 
+    ///
     /// Called when a user requests output in a format provided by this plugin.
     fn format_output(&self, formatter: &str, data: &str) -> PluginResult<String> {
         let _ = (formatter, data);
         Err(PluginError::ExecutionFailed(
-            "Formatter not implemented".to_string()
+            "Formatter not implemented".to_string(),
         ))
     }
-    
+
     /// Check if the plugin can be hot-reloaded
     fn supports_hot_reload(&self) -> bool {
         false
     }
-    
+
     /// Prepare for hot-reload
-    /// 
+    ///
     /// Called before the plugin is reloaded. The plugin should serialize
     /// any state it wants to preserve across reloads.
     fn prepare_reload(&self) -> PluginResult<Box<dyn Any + Send>> {
         Ok(Box::new(()))
     }
-    
+
     /// Restore state after hot-reload
-    /// 
+    ///
     /// Called after the plugin is reloaded. The plugin should restore
     /// any state from the previous version.
     fn restore_from_reload(&mut self, state: Box<dyn Any + Send>) -> PluginResult<()> {
@@ -163,7 +169,7 @@ pub trait InspectorPlugin: Send + Sync {
 }
 
 /// Symbol name for the plugin constructor function
-/// 
+///
 /// Every plugin shared library must export a function with this name
 /// that returns a boxed instance of the plugin.
 pub const PLUGIN_CONSTRUCTOR_SYMBOL: &str = "create_plugin";
@@ -174,17 +180,17 @@ pub type PluginConstructor = unsafe fn() -> *mut dyn InspectorPlugin;
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     struct TestPlugin {
         manifest: PluginManifest,
     }
-    
+
     impl InspectorPlugin for TestPlugin {
         fn metadata(&self) -> PluginManifest {
             self.manifest.clone()
         }
     }
-    
+
     #[test]
     fn test_plugin_trait() {
         let manifest = PluginManifest {
@@ -203,11 +209,11 @@ mod tests {
             library: "test.so".to_string(),
             dependencies: vec![],
         };
-        
+
         let plugin = TestPlugin {
             manifest: manifest.clone(),
         };
-        
+
         assert_eq!(plugin.metadata().name, "test-plugin");
         assert_eq!(plugin.commands().len(), 0);
         assert_eq!(plugin.formatters().len(), 0);

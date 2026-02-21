@@ -297,7 +297,13 @@ pub fn compute_wasm_sha256(wasm_bytes: &[u8]) -> String {
 
 /// Reads a WASM file from disk and computes its SHA-256 checksum.
 pub fn load_wasm<P: AsRef<Path>>(path: P) -> Result<WasmFile> {
-    let bytes = fs::read(path)?;
+    let path_ref = path.as_ref();
+    let bytes = fs::read(path_ref).map_err(|e| {
+        crate::DebuggerError::WasmLoadError(format!(
+            "Failed to read WASM file at {:?}: {}",
+            path_ref, e
+        ))
+    })?;
     let sha256_hash = compute_wasm_sha256(&bytes);
     Ok(WasmFile { bytes, sha256_hash })
 }
