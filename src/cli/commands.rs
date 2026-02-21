@@ -13,6 +13,9 @@ use crate::ui::tui::DebuggerUI;
 use crate::Result;
 use anyhow::Context;
 use std::fs;
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::path::Path;
 
 fn print_info(message: impl AsRef<str>) {
     println!("{}", Formatter::info(message));
@@ -24,6 +27,21 @@ fn print_success(message: impl AsRef<str>) {
 
 fn print_warning(message: impl AsRef<str>) {
     println!("{}", Formatter::warning(message));
+}
+
+fn write_to_file(path: &Path, content: &str, append: bool) -> Result<()> {
+    let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .append(append)
+        .truncate(!append)
+        .open(path)
+        .with_context(|| format!("Failed to open file: {:?}", path))?;
+
+    file.write_all(content.as_bytes())
+        .with_context(|| format!("Failed to write to file: {:?}", path))?;
+
+    Ok(())
 }
 
 /// Execute batch mode with parallel execution
@@ -155,6 +173,11 @@ pub fn run(args: RunArgs, _verbosity: Verbosity) -> Result<()> {
         executor.set_initial_storage(storage)?;
     }
 
+    let host = executor.host();
+    let initial_memory =
+        crate::inspector::budget::BudgetInspector::get_cpu_usage(host).memory_bytes;
+    let mut memory_tracker = crate::inspector::budget::MemoryTracker::new(initial_memory);
+
     let mut engine = DebuggerEngine::new(executor, args.breakpoint);
 
     if args.instruction_debug {
@@ -174,10 +197,33 @@ pub fn run(args: RunArgs, _verbosity: Verbosity) -> Result<()> {
     }
 
     print_info("\n--- Execution Start ---\n");
+    memory_tracker.record_snapshot(engine.executor().host(), "before_execution");
     let result = engine.execute(&args.function, parsed_args.as_deref())?;
+
+    if let Ok(diagnostic_events) = engine.executor().get_diagnostic_events() {
+        let mut previous_memory = initial_memory;
+        for (idx, _event) in diagnostic_events.iter().enumerate() {
+            let current_memory =
+                crate::inspector::budget::BudgetInspector::get_cpu_usage(engine.executor().host())
+                    .memory_bytes;
+            if current_memory != previous_memory {
+                memory_tracker.record_memory_change(
+                    previous_memory,
+                    current_memory,
+                    &format!("diagnostic_event_{}", idx),
+                );
+                previous_memory = current_memory;
+            }
+        }
+    }
+
+    memory_tracker.record_snapshot(engine.executor().host(), "after_execution");
     print_success("\n--- Execution Complete ---\n");
     print_success(format!("Result: {:?}", result));
     logging::log_execution_complete(&result);
+
+    let memory_summary = memory_tracker.finalize(engine.executor().host());
+    memory_summary.display();
 
     let mut json_events = None;
     if args.show_events {
@@ -232,13 +278,14 @@ pub fn run(args: RunArgs, _verbosity: Verbosity) -> Result<()> {
         json_auth = Some(auth_tree);
     }
 
-    if args.json
+    let is_json_output = args.json
         || args
             .format
             .as_deref()
             .map(|f| f.eq_ignore_ascii_case("json"))
-            .unwrap_or(false)
-    {
+            .unwrap_or(false);
+
+    let output_content = if is_json_output {
         let mut output = serde_json::json!({
             "result": result,
         });
@@ -261,7 +308,58 @@ pub fn run(args: RunArgs, _verbosity: Verbosity) -> Result<()> {
             output["auth"] = serde_json::to_value(auth_tree).unwrap_or(serde_json::Value::Null);
         }
 
-        println!("{}", serde_json::to_string_pretty(&output)?);
+        let memory_json = serde_json::to_value(&memory_summary).unwrap_or(serde_json::Value::Null);
+        output["memory"] = memory_json;
+
+        let content = serde_json::to_string_pretty(&output)?;
+        println!("{}", content);
+        content
+    } else {
+        let mut text_output = Vec::new();
+        text_output.push(format!("Result: {:?}", result));
+
+        let memory_text = format!(
+            "\n=== Memory Allocation Summary ===\nPeak Memory Usage: {} bytes\nAllocation Count: {}\nTotal Allocated Bytes: {} bytes\nInitial Memory: {} bytes\nFinal Memory: {} bytes\nMemory Delta: {} bytes",
+            memory_summary.peak_memory,
+            memory_summary.allocation_count,
+            memory_summary.total_allocated_bytes,
+            memory_summary.initial_memory,
+            memory_summary.final_memory,
+            memory_summary.final_memory.saturating_sub(memory_summary.initial_memory)
+        );
+        text_output.push(memory_text);
+
+        if let Some(events) = json_events {
+            text_output.push("\n--- Events ---".to_string());
+            for (i, event) in events.iter().enumerate() {
+                text_output.push(format!("Event #{}:", i));
+                text_output.push(format!(
+                    "  Contract: {}",
+                    event.contract_id.as_deref().unwrap_or("<none>")
+                ));
+                text_output.push(format!("  Topics: {:?}", event.topics));
+                text_output.push(format!("  Data: {}", event.data));
+            }
+        }
+
+        if let Some(auth_tree) = json_auth {
+            text_output.push("\n--- Authorizations ---".to_string());
+            let auth_json = serde_json::to_string_pretty(&auth_tree)
+                .unwrap_or_else(|_| "Failed to serialize auth tree".to_string());
+            text_output.push(auth_json);
+        }
+
+        text_output.join("\n")
+    };
+
+    if let Some(output_path) = &args.save_output {
+        write_to_file(output_path, &output_content, args.append)?;
+        let mode = if args.append {
+            "appended to"
+        } else {
+            "written to"
+        };
+        print_success(format!("Results {}: {:?}", mode, output_path));
     }
 
     Ok(())
