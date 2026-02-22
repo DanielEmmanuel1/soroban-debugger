@@ -8,6 +8,7 @@ use crate::{
         extract_contract_metadata, get_module_info,
         parse_function_signatures, parse_functions,
     },
+    utils::wasm::{extract_contract_metadata, get_module_info, parse_function_signatures},
     InspectArgs, Result,
 };
 use colored::Colorize;
@@ -19,12 +20,8 @@ const BAR_WIDTH: usize = 54;
 
 /// CLI entry point for the `inspect` sub-command.
 pub fn run(args: &InspectArgs) -> Result<()> {
-    let wasm_file = crate::utils::wasm::load_wasm(&args.contract).map_err(|e| {
-        anyhow::anyhow!(
-            "Cannot read WASM file '{}': {e}",
-            args.contract.display()
-        )
-    })?;
+    let wasm_file = crate::utils::wasm::load_wasm(&args.contract)
+        .map_err(|e| anyhow::anyhow!("Cannot read WASM file '{}': {e}", args.contract.display()))?;
     let wasm_bytes = wasm_file.bytes;
     let wasm_hash = wasm_file.sha256_hash;
 
@@ -41,7 +38,7 @@ pub fn run(args: &InspectArgs) -> Result<()> {
     if args.json {
         print_json_report(&args.contract, &wasm_bytes)
     } else {
-        println!();
+        crate::logging::log_display("", crate::logging::LogLevel::Info);
         print_report(&args.contract, &wasm_bytes)
     }
 }
@@ -71,16 +68,19 @@ fn print_json_report(path: &Path, wasm_bytes: &[u8]) -> Result<()> {
         metadata,
     };
 
-    println!("{}", serde_json::to_string_pretty(&report)?);
+    crate::logging::log_display(
+        serde_json::to_string_pretty(&report)?,
+        crate::logging::LogLevel::Info,
+    );
     Ok(())
 }
 
 // ─── report ───────────────────────────────────────────────────────────────────
 
 fn print_report(path: &Path, wasm_bytes: &[u8]) -> Result<()> {
-    let info       = get_module_info(wasm_bytes)?;
+    let info = get_module_info(wasm_bytes)?;
     let signatures = parse_function_signatures(wasm_bytes)?;
-    let metadata   = extract_contract_metadata(wasm_bytes)?;
+    let metadata = extract_contract_metadata(wasm_bytes)?;
 
     let heavy = "═".repeat(BAR_WIDTH);
 
@@ -92,15 +92,64 @@ fn print_report(path: &Path, wasm_bytes: &[u8]) -> Result<()> {
         format!("{} bytes", wasm_bytes.len()).bright_white(),
         wasm_bytes.len() as f64 / 1024.0
     );
+    // ── header ────────────────────────────────────────────────────────────────
+    crate::logging::log_display(&heavy, crate::logging::LogLevel::Info);
+    crate::logging::log_display(
+        format!("  {}", "Soroban Contract Inspector".bold().cyan()),
+        crate::logging::LogLevel::Info,
+    );
+    crate::logging::log_display(&heavy, crate::logging::LogLevel::Info);
+    crate::logging::log_display("", crate::logging::LogLevel::Info);
+    crate::logging::log_display(
+        format!("  File : {}", path.display().to_string().bright_white()),
+        crate::logging::LogLevel::Info,
+    );
+    crate::logging::log_display(
+        format!(
+            "  Size : {} ({:.2} KB)",
+            format!("{} bytes", wasm_bytes.len()).bright_white(),
+            wasm_bytes.len() as f64 / 1024.0
+        ),
+        crate::logging::LogLevel::Info,
+    );
+    crate::logging::log_display("", crate::logging::LogLevel::Info);
 
     section_header("Module Statistics");
     println!("  Types      : {}", info.type_count.to_string().bright_white());
     println!("  Functions  : {}", info.function_count.to_string().bright_white());
     println!("  Exports    : {}\n", info.export_count.to_string().bright_white());
+    crate::logging::log_display(
+        format!(
+            "  Types      : {}",
+            info.type_count.to_string().bright_white()
+        ),
+        crate::logging::LogLevel::Info,
+    );
+    crate::logging::log_display(
+        format!(
+            "  Functions  : {}",
+            info.function_count.to_string().bright_white()
+        ),
+        crate::logging::LogLevel::Info,
+    );
+    crate::logging::log_display(
+        format!(
+            "  Exports    : {}",
+            info.export_count.to_string().bright_white()
+        ),
+        crate::logging::LogLevel::Info,
+    );
+    crate::logging::log_display("", crate::logging::LogLevel::Info);
 
     section_header("WASM Section Breakdown");
-    println!("  {:<20} | {:>10} | {:>6}", "Section", "Size", "Total%");
-    println!("  {}|{}|{}", "─".repeat(21), "─".repeat(12), "─".repeat(8));
+    crate::logging::log_display(
+        format!("  {:<20} | {:>10} | {:>6}", "Section", "Size", "Total%"),
+        crate::logging::LogLevel::Info,
+    );
+    crate::logging::log_display(
+        format!("  {}|{}|{}", "─".repeat(21), "─".repeat(12), "─".repeat(8)),
+        crate::logging::LogLevel::Info,
+    );
 
     for section in &info.sections {
         let percentage = (section.size as f64 / info.total_size as f64) * 100.0;
@@ -112,11 +161,28 @@ fn print_report(path: &Path, wasm_bytes: &[u8]) -> Result<()> {
 
         if percentage > 50.0 {
             println!("{}", row.yellow().bold());
+
+        let row = format!(
+            "  {:<20} | {:>10} | {:>5.1}%",
+            section.name, size_str, percentage
+        );
+
+        // Highlight sections over 50KB or more than 50% of total
+        if section.size > 50 * 1024 || percentage > 50.0 {
+            crate::logging::log_display(
+                row.red().bold().to_string(),
+                crate::logging::LogLevel::Info,
+            );
+        } else if section.size > 10 * 1024 {
+            crate::logging::log_display(row.yellow().to_string(), crate::logging::LogLevel::Info);
         } else {
-            println!("{}", row.bright_white());
+            crate::logging::log_display(
+                row.bright_white().to_string(),
+                crate::logging::LogLevel::Info,
+            );
         }
     }
-    println!();
+    crate::logging::log_display("", crate::logging::LogLevel::Info);
 
     section_header("Exported Functions");
     if signatures.is_empty() {
@@ -130,10 +196,24 @@ fn print_report(path: &Path, wasm_bytes: &[u8]) -> Result<()> {
                 println!("    {}", f);
             }
         }
+        crate::logging::log_display(
+            "  (no contractspecv0 section found)",
+            crate::logging::LogLevel::Info,
+        );
     } else {
         let name_w = signatures.iter().map(|s| s.name.len()).max().unwrap_or(8);
-        println!("  {:<name_w$}  Signature", "Function", name_w = name_w);
-        println!("  {}  {}", "─".repeat(name_w), "─".repeat(BAR_WIDTH - name_w - 4));
+        crate::logging::log_display(
+            format!("  {:<name_w$}  Signature", "Function", name_w = name_w),
+            crate::logging::LogLevel::Info,
+        );
+        crate::logging::log_display(
+            format!(
+                "  {}  {}",
+                "─".repeat(name_w),
+                "─".repeat(BAR_WIDTH - name_w - 4)
+            ),
+            crate::logging::LogLevel::Info,
+        );
 
         for sig in &signatures {
             let params: Vec<String> = sig.params.iter()
@@ -142,37 +222,59 @@ fn print_report(path: &Path, wasm_bytes: &[u8]) -> Result<()> {
             let ret = match &sig.return_type {
                 Some(t) => format!(" -> {t}"),
                 None    => " -> Void".to_string(),
+                Some(t) if t != "Void" => format!(" -> {t}"),
+                _ => String::new(),
             };
 
             println!("  {:<name_w$}  ({}){ret}", sig.name, params.join(", "), name_w = name_w);
+            crate::logging::log_display(
+                format!(
+                    "  {:<name_w$}  ({}){ret}",
+                    sig.name,
+                    params.join(", "),
+                    name_w = name_w,
+                ),
+                crate::logging::LogLevel::Info,
+            );
         }
     }
-    println!();
+    crate::logging::log_display("", crate::logging::LogLevel::Info);
 
     section_header("Contract Metadata");
     if metadata.is_empty() {
-        println!("  ⚠  No metadata section embedded in this contract.");
+        crate::logging::log_display(
+            "  ⚠  No metadata section embedded in this contract.",
+            crate::logging::LogLevel::Info,
+        );
     } else {
         print_field("Contract Version", &metadata.contract_version);
-        print_field("SDK Version",      &metadata.sdk_version);
-        print_field("Build Date",       &metadata.build_date);
-        print_field("Author / Org",     &metadata.author);
-        print_field("Description",      &metadata.description);
-        print_field("Implementation",   &metadata.implementation);
+        print_field("SDK Version", &metadata.sdk_version);
+        print_field("Build Date", &metadata.build_date);
+        print_field("Author / Org", &metadata.author);
+        print_field("Description", &metadata.description);
+        print_field("Implementation", &metadata.implementation);
     }
 
-    println!("{heavy}");
+    crate::logging::log_display(&heavy, crate::logging::LogLevel::Info);
     Ok(())
 }
 
 fn section_header(title: &str) {
     let fill = BAR_WIDTH.saturating_sub(title.len() + 5);
-    println!("─── {title} {}", "─".repeat(fill));
+    crate::logging::log_display(
+        format!("─── {title} {}", "─".repeat(fill)),
+        crate::logging::LogLevel::Info,
+    );
 }
 
 fn print_field(label: &str, value: &Option<String>) {
     if let Some(v) = value {
         println!("  {label:<20} : {v}");
+        // Left-align the label in a 20-char column for consistent spacing.
+        crate::logging::log_display(
+            format!("  {label:<20} : {v}"),
+            crate::logging::LogLevel::Info,
+        );
     }
 }
 
@@ -232,8 +334,7 @@ mod tests {
     /// The report must never error when metadata IS present.
     #[test]
     fn report_on_metadata_present_wasm_succeeds() {
-        let json =
-            r#"{"contract_version":"2.0.0","sdk_version":"22.0.0","author":"Acme Corp"}"#;
+        let json = r#"{"contract_version":"2.0.0","sdk_version":"22.0.0","author":"Acme Corp"}"#;
         let wasm = wasm_with_custom_section("contractmeta", json.as_bytes());
         let result = print_report(Path::new("test.wasm"), &wasm);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
