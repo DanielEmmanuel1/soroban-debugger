@@ -11,9 +11,9 @@ use std::sync::{Arc, Mutex};
 use tracing::{info, warn};
 
 /// Storage snapshot for dry-run rollback.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct StorageSnapshot {
-    _contract_address: Address,
+    pub storage: soroban_env_host::storage::Storage,
 }
 
 /// Executes Soroban contracts in a test environment.
@@ -138,18 +138,40 @@ impl ContractExecutor {
 
     /// Capture a snapshot of current contract storage.
     pub fn get_storage_snapshot(&self) -> Result<HashMap<String, String>> {
-        Ok(HashMap::new())
+        let mut snapshot = HashMap::new();
+        self.env.host().with_mut_storage(|storage| {
+            for (key, entry) in &storage.map {
+                let key_str = format!("{:?}", key);
+                let entry_str = match entry {
+                    Some(e) => format!("{:?}", e),
+                    None => "<deleted>".to_string(),
+                };
+                snapshot.insert(key_str, entry_str);
+            }
+            Ok(())
+        })?;
+        Ok(snapshot)
     }
 
     /// Snapshot current storage state for dry-run rollback.
     pub fn snapshot_storage(&self) -> Result<StorageSnapshot> {
-        Ok(StorageSnapshot {
-            _contract_address: self.contract_address.clone(),
-        })
+        let storage = self
+            .env
+            .host()
+            .with_mut_storage(|storage| Ok(storage.clone()))
+            .map_err(|e| anyhow::anyhow!("Failed to snapshot storage: {:?}", e))?;
+        Ok(StorageSnapshot { storage })
     }
 
     /// Restore storage state from snapshot (dry-run rollback).
-    pub fn restore_storage(&mut self, _snapshot: &StorageSnapshot) -> Result<()> {
+    pub fn restore_storage(&mut self, snapshot: &StorageSnapshot) -> Result<()> {
+        self.env
+            .host()
+            .with_mut_storage(|storage| {
+                *storage = snapshot.storage.clone();
+                Ok(())
+            })
+            .map_err(|e| anyhow::anyhow!("Failed to restore storage: {:?}", e))?;
         info!("Storage state restored (dry-run rollback)");
         Ok(())
     }
@@ -211,3 +233,5 @@ impl ContractExecutor {
         }
     }
 }
+
+

@@ -277,7 +277,8 @@ fn run_dry_run(args: &RunArgs) -> Result<()> {
         executor.set_mock_specs(&args.mock)?;
     }
 
-    let storage_snapshot = executor.snapshot_storage()?;
+    let dry_run_snapshot = executor.snapshot_storage()?;
+    let storage_before = executor.get_storage_snapshot()?;
 
     let mut engine = DebuggerEngine::new(executor, args.breakpoint.clone());
 
@@ -285,8 +286,20 @@ fn run_dry_run(args: &RunArgs) -> Result<()> {
     let result = engine.execute(&args.function, parsed_args.as_deref())?;
     print_success("\n[DRY RUN] --- Execution Complete ---\n");
     print_success(format!("[DRY RUN] Result: {:?}", result));
+
     if !args.mock.is_empty() {
-        display_mock_call_log(&engine.executor().get_mock_call_log());
+        let mock_calls = engine.executor().get_mock_call_log();
+        println!("\n[DRY RUN] --- Mock Calls ---");
+        for entry in mock_calls {
+            println!(
+                "[DRY RUN]  {} {}.{} (mocked: {}) -> {}",
+                if entry.mocked { "✓" } else { "✗" },
+                entry.contract_id,
+                entry.function,
+                entry.mocked,
+                entry.returned.as_deref().unwrap_or("<none>")
+            );
+        }
     }
 
     if args.show_events {
@@ -313,7 +326,22 @@ fn run_dry_run(args: &RunArgs) -> Result<()> {
         }
     }
 
-    engine.executor_mut().restore_storage(&storage_snapshot)?;
+    let storage_after = engine.executor().get_storage_snapshot()?;
+    let diff = crate::inspector::StorageInspector::compute_diff(&storage_before, &storage_after);
+    if !diff.is_empty() {
+        println!("\n[DRY RUN] --- Storage Changes ---");
+        for (key, val) in &diff.added {
+            println!("[DRY RUN]  + {} = {}", key, val);
+        }
+        for (key, (old, new)) in &diff.modified {
+            println!("[DRY RUN]  ~ {}: {} -> {}", key, old, new);
+        }
+        for key in &diff.deleted {
+            println!("[DRY RUN]  - {}", key);
+        }
+    }
+
+    engine.executor_mut().restore_storage(&dry_run_snapshot)?;
     print_success("\n[DRY RUN] Storage state restored (changes rolled back)");
 
     Ok(())
