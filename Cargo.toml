@@ -1,3 +1,10 @@
+[workspace]
+members = [
+    ".",
+    "crates/soroban-debug-mock",
+    "examples/mock-usage",
+]
+
 [package]
 name = "soroban-debugger"
 version = "0.1.0"
