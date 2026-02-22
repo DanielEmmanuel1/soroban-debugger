@@ -1,5 +1,6 @@
 use crate::config::Config;
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
+
 use clap_complete::Shell;
 use std::path::PathBuf;
 
@@ -9,6 +10,14 @@ pub enum Verbosity {
     Quiet,
     Normal,
     Verbose,
+}
+
+/// CLI output format.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
+pub enum OutputFormat {
+    #[default]
+    Pretty,
+    Json,
 }
 
 impl Verbosity {
@@ -34,6 +43,10 @@ pub struct Cli {
     /// Show verbose output including internal details
     #[arg(short, long, global = true)]
     pub verbose: bool,
+
+    /// Suppress startup banner output
+    #[arg(long, global = true)]
+    pub no_banner: bool,
 
     /// Show historical budget trend visualization
     #[arg(long)]
@@ -163,6 +176,10 @@ pub struct RunArgs {
     #[arg(long)]
     pub format: Option<String>,
 
+    /// Output mode for command result rendering (pretty, json)
+    #[arg(long = "output", value_enum, default_value_t = OutputFormat::Pretty)]
+    pub output_format: OutputFormat,
+
     /// Show contract events emitted during execution
     #[arg(long)]
     pub show_events: bool,
@@ -226,6 +243,7 @@ pub struct RunArgs {
     pub generate_test: Option<PathBuf>,
 
     /// Overwrite the test file if it already exists (default: append)
+
     #[arg(long)]
     pub overwrite: bool,
 
@@ -251,6 +269,16 @@ pub struct RunArgs {
 }
 
 impl RunArgs {
+    pub fn is_json_output(&self) -> bool {
+        self.output_format == OutputFormat::Json
+            || self.json
+            || self
+                .format
+                .as_deref()
+                .map(|f| f.eq_ignore_ascii_case("json"))
+                .unwrap_or(false)
+    }
+
     pub fn merge_config(&mut self, config: &Config) {
         // Breakpoints
         if self.breakpoint.is_empty() && !config.debug.breakpoints.is_empty() {
@@ -320,6 +348,7 @@ pub struct ReplArgs {
     pub wasm: Option<PathBuf>,
 
     /// Network snapshot file to load before starting REPL session
+    /// Network snapshot file to load before starting interactive session
     #[arg(long)]
     pub network_snapshot: Option<PathBuf>,
 
@@ -435,6 +464,114 @@ pub struct UpgradeCheckArgs {
     /// Output file for the compatibility report (default: stdout)
     #[arg(long)]
     pub output: Option<PathBuf>,
+}
+
+#[derive(Parser)]
+pub struct AnalyzeArgs {
+    /// Path to the contract WASM file
+    #[arg(short, long)]
+    pub contract: PathBuf,
+
+    /// Function name to execute for dynamic analysis (optional)
+    #[arg(short, long)]
+    pub function: Option<String>,
+
+    /// Function arguments as JSON array for dynamic analysis (optional)
+    #[arg(short, long)]
+    pub args: Option<String>,
+
+    /// Initial storage state as JSON object (optional)
+    #[arg(short, long)]
+    pub storage: Option<String>,
+
+    /// Output format (text, json)
+    #[arg(long, default_value = "text")]
+    pub format: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Cli, Commands, OutputFormat};
+    use clap::Parser;
+
+    #[test]
+    fn run_output_defaults_to_pretty() {
+        let cli = Cli::parse_from([
+            "soroban-debug",
+            "run",
+            "--contract",
+            "contract.wasm",
+            "--function",
+            "increment",
+        ]);
+
+        let Commands::Run(args) = cli.command.expect("run command expected") else {
+            panic!("run command expected");
+        };
+
+        assert_eq!(args.output_format, OutputFormat::Pretty);
+        assert!(!args.is_json_output());
+    }
+
+    #[test]
+    fn run_output_json_enables_json_mode() {
+        let cli = Cli::parse_from([
+            "soroban-debug",
+            "run",
+            "--contract",
+            "contract.wasm",
+            "--function",
+            "increment",
+            "--output",
+            "json",
+        ]);
+
+        let Commands::Run(args) = cli.command.expect("run command expected") else {
+            panic!("run command expected");
+        };
+
+        assert_eq!(args.output_format, OutputFormat::Json);
+        assert!(args.is_json_output());
+    }
+
+    #[test]
+    fn legacy_json_flag_still_enables_json_mode() {
+        let cli = Cli::parse_from([
+            "soroban-debug",
+            "run",
+            "--contract",
+            "contract.wasm",
+            "--function",
+            "increment",
+            "--json",
+        ]);
+
+        let Commands::Run(args) = cli.command.expect("run command expected") else {
+            panic!("run command expected");
+        };
+
+        assert!(args.is_json_output());
+    }
+
+    #[test]
+    fn legacy_format_json_still_enables_json_mode() {
+        let cli = Cli::parse_from([
+            "soroban-debug",
+            "run",
+            "--contract",
+            "contract.wasm",
+            "--function",
+            "increment",
+            "--format",
+            "json",
+        ]);
+
+        let Commands::Run(args) = cli.command.expect("run command expected") else {
+            panic!("run command expected");
+        };
+
+        assert!(args.is_json_output());
+    }
 }
 
 #[derive(Parser)]

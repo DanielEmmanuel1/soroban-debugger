@@ -154,7 +154,8 @@ pub fn get_module_info(wasm_bytes: &[u8]) -> Result<ModuleInfo> {
     };
 
     for payload in Parser::new(0).parse_all(wasm_bytes) {
-        let payload = payload.map_err(|e| DebuggerError::WasmLoadError(format!("Failed to parse WASM: {}", e)))?;
+        let payload = payload
+            .map_err(|e| DebuggerError::WasmLoadError(format!("Failed to parse WASM: {}", e)))?;
         match payload {
             Payload::TypeSection(reader) => {
                 info.type_count = reader.count();
@@ -178,7 +179,9 @@ pub fn get_module_info(wasm_bytes: &[u8]) -> Result<ModuleInfo> {
             Payload::CodeSectionEntry(reader) => add_section("Code (Entry)".into(), reader.range()),
             Payload::DataSection(reader) => add_section("Data".into(), reader.range()),
             Payload::DataCountSection { range, .. } => add_section("Data Count".into(), range),
-            Payload::CustomSection(reader) => add_section(format!("Custom ({})", reader.name()), reader.range()),
+            Payload::CustomSection(reader) => {
+                add_section(format!("Custom ({})", reader.name()), reader.range())
+            }
             _ => {}
         }
     }
