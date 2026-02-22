@@ -1095,7 +1095,7 @@ pub fn replay(args: ReplayArgs, verbosity: Verbosity) -> Result<()> {
         DebuggerError::ExecutionError("Trace file does not contain function name".to_string())
     })?;
 
-    let args_str = original_trace.args.as_ref().map(|s| s.as_str());
+    let args_str = original_trace.args.as_deref();
 
     // Determine how many steps to replay
     let replay_steps = args.replay_until.unwrap_or(usize::MAX);
@@ -1131,23 +1131,23 @@ pub fn replay(args: ReplayArgs, verbosity: Verbosity) -> Result<()> {
     }
 
     let mut engine = DebuggerEngine::new(executor, vec![]);
-    
+
     logging::log_execution_start(function, args_str);
     let replayed_result = engine.execute(function, args_str)?;
-    
+
     print_success("\n--- Replay Complete ---\n");
     print_success(format!("Replayed Result: {:?}", replayed_result));
     logging::log_execution_complete(&replayed_result);
 
     // Compare results
     print_info("\n--- Comparison ---");
-    
+
     let original_return_str = original_trace
         .return_value
         .as_ref()
         .map(|v| serde_json::to_string(v).unwrap_or_default())
         .unwrap_or_default();
-    
+
     let results_match = replayed_result.trim() == original_return_str.trim()
         || format!("\"{replayed_result}\"") == original_return_str;
 
@@ -1173,10 +1173,10 @@ pub fn replay(args: ReplayArgs, verbosity: Verbosity) -> Result<()> {
             "  Replayed CPU: {} instructions",
             replayed_budget.cpu_instructions
         ));
-        
-        let cpu_diff = replayed_budget.cpu_instructions as i64
-            - original_budget.cpu_instructions as i64;
-        
+
+        let cpu_diff =
+            replayed_budget.cpu_instructions as i64 - original_budget.cpu_instructions as i64;
+
         if cpu_diff == 0 {
             print_success("  CPU usage matches exactly ✓");
         } else if cpu_diff > 0 {
@@ -1193,10 +1193,9 @@ pub fn replay(args: ReplayArgs, verbosity: Verbosity) -> Result<()> {
             "  Replayed Memory: {} bytes",
             replayed_budget.memory_bytes
         ));
-        
-        let mem_diff = replayed_budget.memory_bytes as i64
-            - original_budget.memory_bytes as i64;
-        
+
+        let mem_diff = replayed_budget.memory_bytes as i64 - original_budget.memory_bytes as i64;
+
         if mem_diff == 0 {
             print_success("  Memory usage matches exactly ✓");
         } else if mem_diff > 0 {
@@ -1217,9 +1216,15 @@ pub fn replay(args: ReplayArgs, verbosity: Verbosity) -> Result<()> {
             report.push_str(&format!("**Arguments:** {}\n", a));
         }
         report.push_str("\n## Results\n\n");
-        report.push_str(&format!("**Original Return Value:**\n```\n{}\n```\n\n", original_return_str));
-        report.push_str(&format!("**Replayed Return Value:**\n```\n{}\n```\n\n", replayed_result));
-        
+        report.push_str(&format!(
+            "**Original Return Value:**\n```\n{}\n```\n\n",
+            original_return_str
+        ));
+        report.push_str(&format!(
+            "**Replayed Return Value:**\n```\n{}\n```\n\n",
+            replayed_result
+        ));
+
         if results_match {
             report.push_str("✓ **Results match**\n\n");
         } else {
@@ -1229,10 +1234,10 @@ pub fn replay(args: ReplayArgs, verbosity: Verbosity) -> Result<()> {
         if let Some(original_budget) = &original_trace.budget {
             let host = engine.executor().host();
             let replayed_budget = crate::inspector::budget::BudgetInspector::get_cpu_usage(host);
-            
+
             report.push_str("## Budget Comparison\n\n");
-            report.push_str(&format!("| Metric | Original | Replayed | Difference |\n"));
-            report.push_str(&format!("|--------|----------|----------|------------|\n"));
+            report.push_str("| Metric | Original | Replayed | Difference |\n");
+            report.push_str("|--------|----------|----------|------------|\n");
             report.push_str(&format!(
                 "| CPU Instructions | {} | {} | {} |\n",
                 original_budget.cpu_instructions,
@@ -1265,7 +1270,7 @@ pub fn replay(args: ReplayArgs, verbosity: Verbosity) -> Result<()> {
             } else {
                 print_info(format!("{}{}. {}", indent, i, call.function));
             }
-            
+
             if is_partial_replay && i >= replay_steps {
                 print_warning(format!("{}... (stopped at step {})", indent, replay_steps));
                 break;
