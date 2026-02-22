@@ -139,120 +139,46 @@ pub fn parse_cross_contract_calls(wasm_bytes: &[u8]) -> Result<Vec<CrossContract
     Ok(calls)
 }
 
-/// Get high-level module statistics and section breakdown from a WASM binary.
 pub fn get_module_info(wasm_bytes: &[u8]) -> Result<ModuleInfo> {
     let mut info = ModuleInfo {
         total_size: wasm_bytes.len(),
         ..ModuleInfo::default()
     };
-    let parser = Parser::new(0);
 
-    for payload in parser.parse_all(wasm_bytes) {
-        let payload = payload
-            .map_err(|e| DebuggerError::WasmLoadError(format!("Failed to parse WASM: {}", e)))?;
-        match &payload {
-            Payload::Version { .. } => {}
+    let mut add_section = |name: String, range: std::ops::Range<usize>| {
+        info.sections.push(WasmSection {
+            name,
+            size: range.end - range.start,
+            offset: range.start,
+        });
+    };
+
+    for payload in Parser::new(0).parse_all(wasm_bytes) {
+        let payload = payload.map_err(|e| DebuggerError::WasmLoadError(format!("Failed to parse WASM: {}", e)))?;
+        match payload {
             Payload::TypeSection(reader) => {
                 info.type_count = reader.count();
-                info.sections.push(WasmSection {
-                    name: "Type".to_string(),
-                    size: reader.range().end - reader.range().start,
-                    offset: reader.range().start,
-                });
+                add_section("Type".into(), reader.range());
             }
-            Payload::ImportSection(reader) => {
-                info.sections.push(WasmSection {
-                    name: "Import".to_string(),
-                    size: reader.range().end - reader.range().start,
-                    offset: reader.range().start,
-                });
-            }
+            Payload::ImportSection(reader) => add_section("Import".into(), reader.range()),
             Payload::FunctionSection(reader) => {
                 info.function_count = reader.count();
-                info.sections.push(WasmSection {
-                    name: "Function".to_string(),
-                    size: reader.range().end - reader.range().start,
-                    offset: reader.range().start,
-                });
+                add_section("Function".into(), reader.range());
             }
-            Payload::TableSection(reader) => {
-                info.sections.push(WasmSection {
-                    name: "Table".to_string(),
-                    size: reader.range().end - reader.range().start,
-                    offset: reader.range().start,
-                });
-            }
-            Payload::MemorySection(reader) => {
-                info.sections.push(WasmSection {
-                    name: "Memory".to_string(),
-                    size: reader.range().end - reader.range().start,
-                    offset: reader.range().start,
-                });
-            }
-            Payload::GlobalSection(reader) => {
-                info.sections.push(WasmSection {
-                    name: "Global".to_string(),
-                    size: reader.range().end - reader.range().start,
-                    offset: reader.range().start,
-                });
-            }
+            Payload::TableSection(reader) => add_section("Table".into(), reader.range()),
+            Payload::MemorySection(reader) => add_section("Memory".into(), reader.range()),
+            Payload::GlobalSection(reader) => add_section("Global".into(), reader.range()),
             Payload::ExportSection(reader) => {
                 info.export_count = reader.count();
-                info.sections.push(WasmSection {
-                    name: "Export".to_string(),
-                    size: reader.range().end - reader.range().start,
-                    offset: reader.range().start,
-                });
+                add_section("Export".into(), reader.range());
             }
-            Payload::StartSection { range, .. } => {
-                info.sections.push(WasmSection {
-                    name: "Start".to_string(),
-                    size: range.end - range.start,
-                    offset: range.start,
-                });
-            }
-            Payload::ElementSection(reader) => {
-                info.sections.push(WasmSection {
-                    name: "Element".to_string(),
-                    size: reader.range().end - reader.range().start,
-                    offset: reader.range().start,
-                });
-            }
-            Payload::CodeSectionStart { range, .. } => {
-                info.sections.push(WasmSection {
-                    name: "Code".to_string(),
-                    size: range.end - range.start,
-                    offset: range.start,
-                });
-            }
-            Payload::CodeSectionEntry(reader) => {
-                info.sections.push(WasmSection {
-                    name: "Code (Entry)".to_string(),
-                    size: reader.range().end - reader.range().start,
-                    offset: reader.range().start,
-                });
-            }
-            Payload::DataSection(reader) => {
-                info.sections.push(WasmSection {
-                    name: "Data".to_string(),
-                    size: reader.range().end - reader.range().start,
-                    offset: reader.range().start,
-                });
-            }
-            Payload::DataCountSection { range, .. } => {
-                info.sections.push(WasmSection {
-                    name: "Data Count".to_string(),
-                    size: range.end - range.start,
-                    offset: range.start,
-                });
-            }
-            Payload::CustomSection(reader) => {
-                info.sections.push(WasmSection {
-                    name: format!("Custom ({})", reader.name()),
-                    size: reader.range().end - reader.range().start,
-                    offset: reader.range().start,
-                });
-            }
+            Payload::StartSection { range, .. } => add_section("Start".into(), range),
+            Payload::ElementSection(reader) => add_section("Element".into(), reader.range()),
+            Payload::CodeSectionStart { range, .. } => add_section("Code".into(), range),
+            Payload::CodeSectionEntry(reader) => add_section("Code (Entry)".into(), reader.range()),
+            Payload::DataSection(reader) => add_section("Data".into(), reader.range()),
+            Payload::DataCountSection { range, .. } => add_section("Data Count".into(), range),
+            Payload::CustomSection(reader) => add_section(format!("Custom ({})", reader.name()), reader.range()),
             _ => {}
         }
     }

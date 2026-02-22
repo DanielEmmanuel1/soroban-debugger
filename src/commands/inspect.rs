@@ -77,10 +77,6 @@ fn print_json_report(path: &Path, wasm_bytes: &[u8]) -> Result<()> {
 
 // ─── report ───────────────────────────────────────────────────────────────────
 
-/// Render a full inspection report for `wasm_bytes` to stdout.
-///
-/// This function is deliberately kept separate from `run` so that tests can
-/// drive it without touching the filesystem.
 fn print_report(path: &Path, wasm_bytes: &[u8]) -> Result<()> {
     let info       = get_module_info(wasm_bytes)?;
     let signatures = parse_function_signatures(wasm_bytes)?;
@@ -88,26 +84,20 @@ fn print_report(path: &Path, wasm_bytes: &[u8]) -> Result<()> {
 
     let heavy = "═".repeat(BAR_WIDTH);
 
-    // ── header ────────────────────────────────────────────────────────────────
     println!("{heavy}");
     println!("  {}", "Soroban Contract Inspector".bold().cyan());
-    println!("{heavy}");
-    println!();
+    println!("{heavy}\n");
     println!("  File : {}", path.display().to_string().bright_white());
-    println!("  Size : {} ({:.2} KB)", 
+    println!("  Size : {} ({:.2} KB)\n", 
         format!("{} bytes", wasm_bytes.len()).bright_white(),
         wasm_bytes.len() as f64 / 1024.0
     );
-    println!();
 
-    // ── module stats ──────────────────────────────────────────────────────────
     section_header("Module Statistics");
     println!("  Types      : {}", info.type_count.to_string().bright_white());
     println!("  Functions  : {}", info.function_count.to_string().bright_white());
-    println!("  Exports    : {}", info.export_count.to_string().bright_white());
-    println!();
+    println!("  Exports    : {}\n", info.export_count.to_string().bright_white());
 
-    // ── section breakdown ─────────────────────────────────────────────────────
     section_header("WASM Section Breakdown");
     println!("  {:<20} | {:>10} | {:>6}", "Section", "Size", "Total%");
     println!("  {}|{}|{}", "─".repeat(21), "─".repeat(12), "─".repeat(8));
@@ -117,23 +107,17 @@ fn print_report(path: &Path, wasm_bytes: &[u8]) -> Result<()> {
         let size_str = format!("{} B", section.size);
         
         let row = format!("  {:<20} | {:>10} | {:>5.1}%", 
-            section.name, 
-            size_str,
-            percentage
+            section.name, size_str, percentage
         );
 
-        // Highlight sections over 50KB or more than 50% of total
-        if section.size > 50 * 1024 || percentage > 50.0 {
-            println!("{}", row.red().bold());
-        } else if section.size > 10 * 1024 {
-            println!("{}", row.yellow());
+        if percentage > 50.0 {
+            println!("{}", row.yellow().bold());
         } else {
             println!("{}", row.bright_white());
         }
     }
     println!();
 
-    // ── function signatures ───────────────────────────────────────────────────
     section_header("Exported Functions");
     if signatures.is_empty() {
         let functions = parse_functions(wasm_bytes).unwrap_or_default();
@@ -152,28 +136,19 @@ fn print_report(path: &Path, wasm_bytes: &[u8]) -> Result<()> {
         println!("  {}  {}", "─".repeat(name_w), "─".repeat(BAR_WIDTH - name_w - 4));
 
         for sig in &signatures {
-            let params: Vec<String> = sig
-                .params
-                .iter()
-                .map(|p| format!("{}: {}", p.name, p.type_name))
-                .collect();
+            let params: Vec<String> = sig.params.iter()
+                .map(|p| format!("{}: {}", p.name, p.type_name)).collect();
 
             let ret = match &sig.return_type {
                 Some(t) => format!(" -> {t}"),
                 None    => " -> Void".to_string(),
             };
 
-            println!(
-                "  {:<name_w$}  ({}){ret}",
-                sig.name,
-                params.join(", "),
-                name_w = name_w,
-            );
+            println!("  {:<name_w$}  ({}){ret}", sig.name, params.join(", "), name_w = name_w);
         }
     }
     println!();
 
-    // ── contract metadata ─────────────────────────────────────────────────────
     section_header("Contract Metadata");
     if metadata.is_empty() {
         println!("  ⚠  No metadata section embedded in this contract.");
@@ -190,18 +165,13 @@ fn print_report(path: &Path, wasm_bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
-// ─── helpers ─────────────────────────────────────────────────────────────────
-
 fn section_header(title: &str) {
-    // "─── Title ──────" where total width equals BAR_WIDTH.
     let fill = BAR_WIDTH.saturating_sub(title.len() + 5);
     println!("─── {title} {}", "─".repeat(fill));
 }
 
-/// Print a labelled row only when the value is `Some`.
 fn print_field(label: &str, value: &Option<String>) {
     if let Some(v) = value {
-        // Left-align the label in a 20-char column for consistent spacing.
         println!("  {label:<20} : {v}");
     }
 }
