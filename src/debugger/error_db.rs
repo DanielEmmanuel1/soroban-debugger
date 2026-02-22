@@ -27,26 +27,89 @@ impl ErrorDatabase {
 
     fn init_standard_errors(&mut self) {
         let std_errs = [
-            (1, "UnknownError", "An unknown error occurred during contract execution", "Unhandled exception or unexpected state", "Check contract logic for unhandled edge cases or add error handling"),
-            (2, "HostError", "Error from the Soroban host environment", "Host operation failed (e.g., storage, budget exceeded)", "Check budget limits, storage access, or host resource constraints"),
-            (3, "ConversionError", "Failed to convert between value types", "Type mismatch or invalid value format", "Verify argument types match function signature and value formats are correct"),
-            (4, "StorageError", "Storage operation failed", "Storage key not found, access denied, or storage limit exceeded", "Check storage key existence, permissions, and storage budget limits"),
-            (5, "BudgetError", "CPU or memory budget exceeded", "Contract execution consumed too many CPU instructions or memory bytes", "Optimize contract code, reduce loop iterations, or use more efficient algorithms"),
-            (6, "AuthError", "Authorization check failed", "Missing required authorization or insufficient permissions", "Ensure proper authorization is provided before calling the function"),
-            (7, "MathError", "Mathematical operation failed", "Division by zero, overflow, or invalid mathematical operation", "Add bounds checking, validate inputs, and handle edge cases in math operations"),
-            (8, "ArrayError", "Array operation failed", "Index out of bounds, invalid array access, or array size exceeded", "Validate array indices before access and check array bounds"),
-            (9, "StringError", "String operation failed", "Invalid string encoding, length exceeded, or malformed string", "Validate string encoding and length before operations"),
-            (10, "MapError", "Map operation failed", "Key not found, invalid key type, or map operation failed", "Check if key exists before access and validate key types"),
+            (
+                1,
+                "UnknownError",
+                "An unknown error occurred during contract execution",
+                "Unhandled exception or unexpected state",
+                "Check contract logic for unhandled edge cases or add error handling",
+            ),
+            (
+                2,
+                "HostError",
+                "Error from the Soroban host environment",
+                "Host operation failed (e.g., storage, budget exceeded)",
+                "Check budget limits, storage access, or host resource constraints",
+            ),
+            (
+                3,
+                "ConversionError",
+                "Failed to convert between value types",
+                "Type mismatch or invalid value format",
+                "Verify argument types match function signature and value formats are correct",
+            ),
+            (
+                4,
+                "StorageError",
+                "Storage operation failed",
+                "Storage key not found, access denied, or storage limit exceeded",
+                "Check storage key existence, permissions, and storage budget limits",
+            ),
+            (
+                5,
+                "BudgetError",
+                "CPU or memory budget exceeded",
+                "Contract execution consumed too many CPU instructions or memory bytes",
+                "Optimize contract code, reduce loop iterations, or use more efficient algorithms",
+            ),
+            (
+                6,
+                "AuthError",
+                "Authorization check failed",
+                "Missing required authorization or insufficient permissions",
+                "Ensure proper authorization is provided before calling the function",
+            ),
+            (
+                7,
+                "MathError",
+                "Mathematical operation failed",
+                "Division by zero, overflow, or invalid mathematical operation",
+                "Add bounds checking, validate inputs, and handle edge cases in math operations",
+            ),
+            (
+                8,
+                "ArrayError",
+                "Array operation failed",
+                "Index out of bounds, invalid array access, or array size exceeded",
+                "Validate array indices before access and check array bounds",
+            ),
+            (
+                9,
+                "StringError",
+                "String operation failed",
+                "Invalid string encoding, length exceeded, or malformed string",
+                "Validate string encoding and length before operations",
+            ),
+            (
+                10,
+                "MapError",
+                "Map operation failed",
+                "Key not found, invalid key type, or map operation failed",
+                "Check if key exists before access and validate key types",
+            ),
         ];
 
         for (code, name, desc, cause, fix) in std_errs {
-            self.standard_errors.insert(code, ErrorExplanation {
+            self.standard_errors.insert(
                 code,
-                name: name.to_string(),
-                description: desc.to_string(),
-                common_cause: cause.to_string(),
-                suggested_fix: fix.to_string(),
-            });
+                ErrorExplanation {
+                    code,
+                    name: name.to_string(),
+                    description: desc.to_string(),
+                    common_cause: cause.to_string(),
+                    suggested_fix: fix.to_string(),
+                },
+            );
         }
     }
 

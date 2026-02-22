@@ -913,8 +913,10 @@ implementation_notes=Line-based format
 
     #[test]
     fn extract_custom_errors() {
-        use stellar_xdr::curr::{ScSpecEntry, ScSpecUdtErrorEnumV0, ScSpecUdtErrorEnumCaseV0, StringM, WriteXdr};
-        
+        use stellar_xdr::curr::{
+            ScSpecEntry, ScSpecUdtErrorEnumCaseV0, ScSpecUdtErrorEnumV0, StringM, WriteXdr,
+        };
+
         let case1 = ScSpecUdtErrorEnumCaseV0 {
             doc: StringM::try_from("My Error 1".as_bytes().to_vec()).unwrap(),
             name: StringM::try_from("ErrorOne".as_bytes().to_vec()).unwrap(),
