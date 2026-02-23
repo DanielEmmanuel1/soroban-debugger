@@ -350,18 +350,20 @@ impl StorageInspector {
     }
 
     /// Capture a snapshot of all storage entries from the host
-    pub fn capture_snapshot(_host: &Host) -> HashMap<String, String> {
-        // In a real implementation, we would iterate through host.get_ledger_entries()
-        // or track changes via a custom Storage instance.
-        // For this debugger, we'll try to extract what's available.
-        // Since Host doesn't easily expose all entries without XDR iteration,
-        // we'll use a placeholder logic that would be backed by actual storage tracking
-        // in a production environment.
-
-        // NOTE: In Soroban host, entries are typically accessed by key.
-        // To show "everything", we'd need to have tracked access during execution.
-
-        HashMap::new()
+    pub fn capture_snapshot(host: &Host) -> HashMap<String, String> {
+        let mut snapshot = HashMap::new();
+        let _ = host.with_mut_storage(|storage| {
+            for (key, entry) in &storage.map {
+                let key_str = format!("{:?}", key);
+                let entry_str = match entry {
+                    Some(e) => format!("{:?}", e),
+                    None => "<deleted>".to_string(),
+                };
+                snapshot.insert(key_str, entry_str);
+            }
+            Ok(())
+        });
+        snapshot
     }
 
     /// Compute the difference between two storage snapshots

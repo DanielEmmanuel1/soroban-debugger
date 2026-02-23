@@ -23,9 +23,9 @@ pub struct ExecutionRecord {
 }
 
 /// Storage snapshot for dry-run rollback.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct StorageSnapshot {
-    _contract_address: Address,
+    pub storage: soroban_env_host::storage::Storage,
 }
 
 use crate::debugger::error_db::ErrorDatabase;
@@ -315,20 +315,33 @@ impl ContractExecutor {
         crate::inspector::events::EventInspector::get_events(self.env.host())
     }
 
-    /// Capture a snapshot of current contract storage.
     pub fn get_storage_snapshot(&self) -> Result<HashMap<String, String>> {
         Ok(crate::inspector::storage::StorageInspector::capture_snapshot(self.env.host()))
     }
 
     /// Snapshot current storage state for dry-run rollback.
     pub fn snapshot_storage(&self) -> Result<StorageSnapshot> {
-        Ok(StorageSnapshot {
-            _contract_address: self.contract_address.clone(),
-        })
+        let storage = self
+            .env
+            .host()
+            .with_mut_storage(|storage| Ok(storage.clone()))
+            .map_err(|e| {
+                DebuggerError::ExecutionError(format!("Failed to snapshot storage: {:?}", e))
+            })?;
+        Ok(StorageSnapshot { storage })
     }
 
     /// Restore storage state from snapshot (dry-run rollback).
-    pub fn restore_storage(&mut self, _snapshot: &StorageSnapshot) -> Result<()> {
+    pub fn restore_storage(&mut self, snapshot: &StorageSnapshot) -> Result<()> {
+        self.env
+            .host()
+            .with_mut_storage(|storage| {
+                *storage = snapshot.storage.clone();
+                Ok(())
+            })
+            .map_err(|e| {
+                DebuggerError::ExecutionError(format!("Failed to restore storage: {:?}", e))
+            })?;
         info!("Storage state restored (dry-run rollback)");
         Ok(())
     }
