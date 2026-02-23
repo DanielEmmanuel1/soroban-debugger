@@ -19,6 +19,7 @@ use serde::Serialize;
 use std::fs;
 use std::io::Write;
 use textplots::{Chart, Plot, Shape};
+use crate::inspector::events::{Event, EventInspector};
 
 fn print_info(message: impl AsRef<str>) {
     if !Formatter::is_quiet() {
@@ -329,29 +330,54 @@ pub fn run(args: RunArgs, verbosity: Verbosity) -> Result<()> {
     }
 
     let mut json_events = None;
-    if args.show_events {
+    if args.show_events || !args.event_filter.is_empty() || args.filter_topic.is_some() {
         print_info("\n--- Events ---");
-        let events = engine.executor().get_events()?;
-        let filtered_events = if let Some(topic) = &args.filter_topic {
-            crate::inspector::events::EventInspector::filter_events(&events, topic)
+
+        // Attempt to read raw events from executor
+        let raw_events = engine.executor().get_events()?;
+
+        // Convert runtime event objects into our inspector::events::Event via serde translation.
+        // This is a generic, safe conversion as long as runtime events are serializable with sensible fields.
+        let converted_events: Vec<Event> = match serde_json::to_value(&raw_events)
+            .and_then(|v| serde_json::from_value(v))
+        {
+            Ok(evts) => evts,
+            Err(e) => {
+                // If conversion fails, fall back to attempting to stringify each raw event for display.
+                print_warning(format!("Failed to convert runtime events for structured display: {}", e));
+                // Fallback: attempt a best-effort stringification
+                let fallback: Vec<Event> = raw_events
+                    .into_iter()
+                    .map(|r| Event {
+                        contract_id: None,
+                        topics: vec![],
+                        data: format!("{:?}", r),
+                    })
+                    .collect();
+                fallback
+            }
+        };
+
+        // Determine filter: prefer repeatable --event-filter, fallback to legacy --filter-topic
+        let filter_opt = if !args.event_filter.is_empty() {
+            Some(args.event_filter.join(","))
         } else {
-            events
+            args.filter_topic.clone()
+        };
+
+        let filtered_events = if let Some(ref filt) = filter_opt {
+            EventInspector::filter_events(&converted_events, filt)
+        } else {
+            converted_events.clone()
         };
 
         if filtered_events.is_empty() {
             print_warning("No events captured.");
         } else {
-            for (i, event) in filtered_events.iter().enumerate() {
-                print_info(format!("Event #{}:", i));
-                if let Some(contract_id) = &event.contract_id {
-                    logging::log_event_emitted(contract_id, event.topics.len());
-                }
-                print_info(format!(
-                    "  Contract: {}",
-                    event.contract_id.as_deref().unwrap_or("<none>")
-                ));
-                print_info(format!("  Topics: {:?}", event.topics));
-                print_info(format!("  Data: {}", event.data));
+            // Display events in readable form
+            let lines = EventInspector::format_events(&filtered_events);
+            for line in &lines {
+                print_info(line);
             }
         }
 
@@ -452,18 +478,7 @@ pub fn run(args: RunArgs, verbosity: Verbosity) -> Result<()> {
         });
 
         if let Some(events) = json_events {
-            output["events"] = serde_json::Value::Array(
-                events
-                    .into_iter()
-                    .map(|event| {
-                        serde_json::json!({
-                            "contract_id": event.contract_id,
-                            "topics": event.topics,
-                            "data": event.data,
-                        })
-                    })
-                    .collect(),
-            );
+            output["events"] = EventInspector::to_json_value(&events);
         }
         if let Some(auth_tree) = json_auth {
             output["auth"] = crate::inspector::auth::AuthInspector::to_json_value(&auth_tree);
@@ -494,47 +509,34 @@ pub fn run(args: RunArgs, verbosity: Verbosity) -> Result<()> {
         }
 
         let json_output = serde_json::to_string_pretty(&output).map_err(|e| {
-            DebuggerError::FileError(format!("Failed to serialize output: {}", e))output["instruction_counts"] = serde_json::json!({
-        })?;ap(|(name, count)| {
+            DebuggerError::FileError(format!("Failed to serialize output: {}", e))
+        })?;
         logging::log_display(&json_output, logging::LogLevel::Info);
-        output_writer.write(&json_output)?;                   "function": name,
-    }                        "count": count,
-rcentage": ((*count as f64 / instr_counts.total as f64) * 100.0)
-    output_writer.flush()?;                    })
+        output_writer.write(&json_output)?;
+    }
+
+    // Show confirmation message if file was written
+    if let Some(output_path) = &args.save_output {
+        print_success(format!(
+            "\n✓ Output saved to: {}",
+            output_path.display()
+        ));
+    }
 
     // Display instruction count per function if available
     if let Some(instr_counts) = get_instruction_counts(&engine) {
-        display_instruction_counts(&instr_counts);}
-        
-        // Include in JSON outputput = serde_json::to_string_pretty(&output).map_err(|e| {
-        if args.jsonrError::FileError(format!("Failed to serialize output: {}", e))
-            || args
-                .formaty(&json_output, logging::LogLevel::Info);
-                .as_deref()
-                .map(|f| f.eq_ignore_ascii_case("json"))
-                .unwrap_or(false)
-        {
-            // Already handled above, but ensure it's in output
-        }/ Display instruction count per function if available
-    }    if let Some(instr_counts) = get_instruction_counts(&engine) {
+        display_instruction_counts(&instr_counts);
+    }
 
-    // Show confirmation message if file was written
-    if let Some(output_path) = &args.save_output {put
-        print_success(format!(
-            "\n✓ Output saved to: {}",
-            output_path.display()     .format
-        ));           .as_deref()
-    }                .map(|f| f.eq_ignore_ascii_case("json"))
-      .unwrap_or(false)
-    Ok(())       {
-}            // Already handled above, but ensure it's in output
+    Ok(())
+}
 
 /// Structure to hold instruction counts per function
 #[derive(Debug, Clone, serde::Serialize)]
-struct InstructionCounts { was written
-    function_counts: Vec<(String, u64)>,(output_path) = &args.save_output {
-    total: u64,       print_success(format!(
-}            "\n✓ Output saved to: {}",
+struct InstructionCounts {
+    function_counts: Vec<(String, u64)>,
+    total: u64,
+}
 
 /// Get instruction counts from the debugger engine
 fn get_instruction_counts(engine: &DebuggerEngine) -> Option<InstructionCounts> {
@@ -542,47 +544,45 @@ fn get_instruction_counts(engine: &DebuggerEngine) -> Option<InstructionCounts> 
     if let Ok(counts) = engine.executor().get_instruction_counts() {
         Some(counts)
     } else {
-        Nonetructure to hold instruction counts per function
-    }[derive(Debug, Clone, serde::Serialize)]
-}struct InstructionCounts {
+        None
+    }
+}
 
 /// Display instruction counts per function in a formatted table
 fn display_instruction_counts(counts: &InstructionCounts) {
     if counts.function_counts.is_empty() {
-        return;et instruction counts from the debugger engine
-    }fn get_instruction_counts(engine: &DebuggerEngine) -> Option<InstructionCounts> {
+        return;
+    }
 
-    print_info("\n--- Instruction Count per Function ---");    if let Ok(counts) = engine.executor().get_instruction_counts() {
+    print_info("\n--- Instruction Count per Function ---");
 
     // Calculate percentages
     let percentages: Vec<f64> = counts
         .function_counts
         .iter()
         .map(|(_, count)| {
-            if counts.total > 0 {ble
-                (*count as f64 / counts.total as f64) * 100.0on_counts(counts: &InstructionCounts) {
-            } else {ion_counts.is_empty() {
-                0.0n;
+            if counts.total > 0 {
+                (*count as f64 / counts.total as f64) * 100.0
+            } else {
+                0.0
             }
         })
-        .collect();    print_info("\n--- Instruction Count per Function ---");
+        .collect();
 
     // Find max widths for alignment
-    let max_func_width = counts<f64> = counts
-        .function_countson_counts
+    let max_func_width = counts
+        .function_counts
         .iter()
-        .map(|(name, _)| name.len())(_, count)| {
-        .max()total > 0 {
-        .unwrap_or(20)*count as f64 / counts.total as f64) * 100.0
-        .max(10);
+        .map(|(name, _)| name.len())
+        .max()
+        .unwrap_or(20);
     let max_count_width = counts
         .function_counts
         .iter()
-        .map(|(_, count)| count.to_string().len())ct();
+        .map(|(_, count)| count.to_string().len())
         .max()
-        .unwrap_or(10)idths for alignment
-        .max(10);    let max_func_width = counts
-ounts
+        .unwrap_or(10);
+
     // Print header
     let header = format!(
         "{:<width1$} | {:>width2$} | {:>8$}",
@@ -591,10 +591,10 @@ ounts
         "Percentage",
         width1 = max_func_width,
         width2 = max_count_width,
-        width3 = 10  .map(|(_, count)| count.to_string().len())
+        width3 = 10
     );
     print_info(&header);
-    print_info(&"-".repeat(header.len()));        .max(10);
+    print_info(&"-".repeat(header.len()));
 
     // Print rows
     for ((func_name, count), percentage) in counts.function_counts.iter().zip(percentages.iter()) {
@@ -607,20 +607,6 @@ ounts
             width2 = max_count_width,
             width3 = 8
         );
-        print_info(&row);rint_info(&"-".repeat(header.len()));
-    }
-
-    print_info(&"-".repeat(header.len())); percentage) in counts.function_counts.iter().zip(percentages.iter()) {
-    let total_row = format!(
-        "{:<width1$} | {:>width2$}",width1$} | {:>width2$} | {:>7.2$}%",
-        "TOTAL",,
-        counts.total,
-        width1 = max_func_width,
-        width2 = max_count_width      width1 = max_func_width,
-    );unt_width,
-    print_info(&total_row);           width3 = 8
-}        );
-
         print_info(&row);
     }
 

@@ -220,7 +220,7 @@ pub struct RunArgs {
     #[arg(long)]
     pub json: bool,
 
-    /// Filter events by topic
+    /// Filter events by topic (deprecated single value). Prefer using --event-filter (repeatable).
     #[arg(long)]
     pub filter_topic: Option<String>,
 
