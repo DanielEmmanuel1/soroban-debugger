@@ -295,6 +295,7 @@ pub fn run(args: RunArgs, verbosity: Verbosity) -> Result<()> {
         };
         let _ = manager.append_record(record);
     }
+    let json_memory_summary = engine.executor().last_memory_summary().cloned();
 
     // Export storage if specified
     if let Some(export_path) = &args.export_storage {
@@ -465,6 +466,11 @@ pub fn run(args: RunArgs, verbosity: Verbosity) -> Result<()> {
         }
         if let Some(ref ledger) = json_ledger {
             output["ledger_entries"] = ledger.to_json();
+        }
+        if let Some(memory_summary) = json_memory_summary {
+            output["memory_summary"] = serde_json::to_value(memory_summary).map_err(|e| {
+                DebuggerError::FileError(format!("Failed to serialize memory summary: {}", e))
+            })?;
         }
 
         logging::log_display(
