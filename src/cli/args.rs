@@ -20,6 +20,9 @@ pub enum Commands {
 
     /// Inspect contract information without executing
     Inspect(InspectArgs),
+
+    /// Check compatibility between two contract versions
+    UpgradeCheck(UpgradeCheckArgs),
 }
 
 #[derive(Parser)]
@@ -97,4 +100,28 @@ pub struct InspectArgs {
     /// Show contract metadata
     #[arg(long)]
     pub metadata: bool,
+}
+
+#[derive(Parser)]
+pub struct UpgradeCheckArgs {
+    /// Path to the old (current) contract WASM file
+    #[arg(long)]
+    pub old: PathBuf,
+
+    /// Path to the new (upgraded) contract WASM file
+    #[arg(long)]
+    pub new: PathBuf,
+
+    /// Output format: text (default) or json
+    #[arg(long, default_value = "text")]
+    pub output: String,
+
+    /// Write report to file instead of stdout
+    #[arg(long)]
+    pub output_file: Option<PathBuf>,
+
+    /// Test inputs as JSON object mapping function names to argument arrays
+    /// e.g. '{"vote": [1, true], "create_proposal": ["title", "desc"]}'
+    #[arg(long)]
+    pub test_inputs: Option<String>,
 }

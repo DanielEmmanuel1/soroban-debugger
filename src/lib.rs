@@ -1,3 +1,4 @@
+pub mod analyzer;
 pub mod cli;
 pub mod debugger;
 pub mod runtime;
