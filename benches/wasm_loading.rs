@@ -10,7 +10,7 @@ fn bench_wasm_loading(c: &mut Criterion) {
 
     c.bench_function("wasm_loading_counter", |b| {
         b.iter(|| {
-            // ContractExecutor::new performs the full loading pipeline including 
+            // ContractExecutor::new performs the full loading pipeline including
             // environment setup, contract registration, and spec parsing.
             let executor = ContractExecutor::new(black_box(wasm_bytes.clone())).unwrap();
             black_box(executor);

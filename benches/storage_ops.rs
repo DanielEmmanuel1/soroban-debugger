@@ -1,8 +1,11 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use soroban_debugger::inspector::storage::StorageInspector;
-use soroban_env_host::Host;
 use soroban_env_host::budget::AsBudget;
-use soroban_env_host::xdr::{LedgerEntry, LedgerEntryData, LedgerKey, ContractDataDurability, ScVal, ScAddress, ScSymbol, LedgerEntryExt, LedgerKeyContractData, ContractDataEntry, ExtensionPoint};
+use soroban_env_host::xdr::{
+    ContractDataDurability, ContractDataEntry, ExtensionPoint, LedgerEntry, LedgerEntryData,
+    LedgerEntryExt, LedgerKey, LedgerKeyContractData, ScAddress, ScSymbol, ScVal,
+};
+use soroban_env_host::Host;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -20,7 +23,10 @@ fn bench_storage_ops(c: &mut Criterion) {
     }
     // Modify 10%
     for i in 0..100 {
-        after.insert(format!("contract_data:Persistent:Symbol(key_{:04})", i), format!("I32({})", i + 1));
+        after.insert(
+            format!("contract_data:Persistent:Symbol(key_{:04})", i),
+            format!("I32({})", i + 1),
+        );
     }
     // Delete 5%
     for i in 900..950 {
@@ -28,12 +34,19 @@ fn bench_storage_ops(c: &mut Criterion) {
     }
     // Add 5%
     for i in 1000..1050 {
-        after.insert(format!("contract_data:Persistent:Symbol(key_{:04})", i), format!("I32({})", i));
+        after.insert(
+            format!("contract_data:Persistent:Symbol(key_{:04})", i),
+            format!("I32({})", i),
+        );
     }
 
     group.bench_function("compute_diff_1000_entries", |b| {
         b.iter(|| {
-            let diff = StorageInspector::compute_diff(black_box(&before), black_box(&after), black_box(&[]));
+            let diff = StorageInspector::compute_diff(
+                black_box(&before),
+                black_box(&after),
+                black_box(&[]),
+            );
             black_box(diff);
         })
     });
@@ -62,10 +75,14 @@ fn bench_storage_ops(c: &mut Criterion) {
                 }),
                 ext: LedgerEntryExt::V0,
             };
-            storage.map.insert(Rc::new(key), Some((Rc::new(entry), None)), host.as_budget()).unwrap();
+            storage
+                .map
+                .insert(Rc::new(key), Some((Rc::new(entry), None)), host.as_budget())
+                .unwrap();
         }
         Ok(())
-    }).unwrap();
+    })
+    .unwrap();
 
     group.bench_function("capture_snapshot_1000_entries", |b| {
         b.iter(|| {
