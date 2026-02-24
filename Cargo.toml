@@ -103,6 +103,10 @@ harness = false
 name = "storage_ops"
 harness = false
 
+[[bench]]
+name = "state_management"
+harness = false
+
 [build-dependencies]
 clap = { version = "4.5", features = ["derive", "cargo"] }
 clap_mangen = "0.2"

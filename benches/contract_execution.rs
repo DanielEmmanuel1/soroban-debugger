@@ -1,6 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use soroban_debugger::runtime::executor::ContractExecutor;
-use soroban_sdk::testutils::budget::Budget;
 use std::fs;
 use std::path::PathBuf;
 

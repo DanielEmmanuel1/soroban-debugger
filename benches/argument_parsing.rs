@@ -4,7 +4,7 @@ use soroban_sdk::Env;
 
 fn bench_argument_parsing(c: &mut Criterion) {
     let env = Env::default();
-    let parser = ArgumentParser::new(env);
+    let _parser = ArgumentParser::new(env);
 
     let mut group = c.benchmark_group("argument_parsing");
 
