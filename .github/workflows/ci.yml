@@ -55,14 +55,30 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
   bench:
-    name: Benchmark
+    name: Benchmark Regression Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Needed to checkout main
       
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
       
       - uses: Swatinem/rust-cache@v2
       
-      - name: Run benchmarks
-        run: cargo bench --bench debugger_bench -- --quick
+      - name: Install critcmp
+        run: cargo install critcmp --version 0.1.7 || true # Ignore if already in cache
+      
+      - name: Run benchmarks (current)
+        run: cargo bench -- --save-baseline new
+        
+      - name: Checkout main and run benchmarks (baseline)
+        run: |
+          git checkout main
+          cargo bench -- --save-baseline base
+          git checkout -
+          
+      - name: Compare benchmarks and check for regressions (>10%)
+        run: critcmp base new --threshold 10
